@@ -1,0 +1,25 @@
+# Generated outputs
+output/results/*.rds
+output/reports/*.html
+04-report/report.html
+04-report/report_files/
+
+# SQLite databases (reproducible from raw data)
+data/db/*.db
+
+# Jupyter
+00-explore/.ipynb_checkpoints/
+
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

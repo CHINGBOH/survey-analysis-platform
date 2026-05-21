@@ -1,0 +1,259 @@
+[
+  {
+    "name": "frequencies",
+    "spss_menu": "Analyze → Descriptive Statistics → Frequencies",
+    "description": "单变量频率分布表",
+    "tables": [
+      {
+        "name": "frequency_table",
+        "columns": ["类别", "频数", "百分比", "有效百分比", "累计百分比"],
+        "query": "SELECT {var} AS 类别, COUNT(*) AS 频数, ROUND(COUNT(*)*100.0/SUM(COUNT(*)) OVER(),1) AS 百分比 FROM respondents WHERE survey='{survey}' GROUP BY {var} ORDER BY 频数 DESC",
+        "note": "缺失值单独列出"
+      }
+    ]
+  },
+  {
+    "name": "descriptives",
+    "spss_menu": "Analyze → Descriptive Statistics → Descriptives",
+    "description": "连续变量描述统计量",
+    "tables": [
+      {
+        "name": "descriptive_statistics",
+        "columns": ["变量", "N", "均值", "标准差", "中位数", "最小值", "最大值", "偏度", "峰度", "标准误"],
+        "query": "uses R psych::describe()",
+        "note": "偏度标准误≈√(6/N), 峰度标准误≈√(24/N)"
+      }
+    ]
+  },
+  {
+    "name": "crosstabs",
+    "spss_menu": "Analyze → Descriptive Statistics → Crosstabs",
+    "description": "列联表 + 卡方检验 + 关联度量",
+    "tables": [
+      {
+        "name": "crosstabulation",
+        "columns": ["{row_var} \\ {col_var}"] 
+      },
+      {
+        "name": "chi_square_tests",
+        "columns": ["检验", "值", "自由度", "渐近显著性(双侧)"],
+        "rows": ["Pearson χ²", "似然比χ²", "线性关联"]
+      },
+      {
+        "name": "symmetric_measures",
+        "columns": ["指标", "值", "近似显著性"],
+        "rows": ["Phi", "Cramer's V", "列联系数", "Goodman-Kruskal Gamma", "Kendall Tau-b"]
+      }
+    ]
+  },
+  {
+    "name": "ttest_independent",
+    "spss_menu": "Analyze → Compare Means → Independent-Samples T Test",
+    "description": "独立样本t检验",
+    "tables": [
+      {
+        "name": "group_statistics",
+        "columns": ["分组", "N", "均值", "标准差", "标准误均值"]
+      },
+      {
+        "name": "independent_samples_test",
+        "columns": ["", "Levene F", "Sig.", "t", "df", "Sig.(双侧)", "均值差", "标准误差", "95%CI下限", "95%CI上限"],
+        "rows": ["假设方差相等", "假设方差不相等"]
+      },
+      {
+        "name": "effect_sizes",
+        "columns": ["效应量", "值", "95%CI下限", "95%CI上限"],
+        "rows": ["Cohen's d", "Hedges' g"]
+      }
+    ]
+  },
+  {
+    "name": "anova_oneway",
+    "spss_menu": "Analyze → Compare Means → One-Way ANOVA",
+    "description": "单因素方差分析",
+    "tables": [
+      {
+        "name": "descriptives",
+        "columns": ["组别", "N", "均值", "标准差", "标准误", "95%CI下限", "95%CI上限"]
+      },
+      {
+        "name": "anova_table",
+        "columns": ["来源", "平方和", "df", "均方", "F", "显著性"],
+        "rows": ["组间", "组内", "总计"]
+      },
+      {
+        "name": "post_hoc",
+        "columns": ["(I)组", "(J)组", "均值差(I-J)", "标准误", "显著性", "95%CI下限", "95%CI上限"]
+      },
+      {
+        "name": "effect_sizes",
+        "columns": ["效应量", "值"],
+        "rows": ["η²", "ω²", "Cohen's f"]
+      }
+    ]
+  },
+  {
+    "name": "correlation",
+    "spss_menu": "Analyze → Correlate → Bivariate",
+    "description": "双变量相关",
+    "tables": [
+      {
+        "name": "correlation_matrix",
+        "columns": ["变量", "{var1}", "{var2}", "..."],
+        "note": "上三角: Pearson r | 下三角: Spearman ρ | *p<.05 **p<.01"
+      }
+    ]
+  },
+  {
+    "name": "reliability",
+    "spss_menu": "Analyze → Scale → Reliability Analysis",
+    "description": "信度分析",
+    "tables": [
+      {
+        "name": "case_processing",
+        "columns": ["", "N", "%"],
+        "rows": ["有效", "已排除", "总计"]
+      },
+      {
+        "name": "reliability_statistics",
+        "columns": ["指标", "值"],
+        "rows": ["Cronbach's α", "标准化α", "题项数", "Guttman λ₆"]
+      },
+      {
+        "name": "item_total_statistics",
+        "columns": ["题项", "删除后均值", "删除后方差", "CITC", "删除后α"]
+      }
+    ]
+  },
+  {
+    "name": "factor_analysis",
+    "spss_menu": "Analyze → Dimension Reduction → Factor",
+    "description": "探索性因子分析",
+    "tables": [
+      {
+        "name": "kmo_bartlett",
+        "columns": ["指标", "值"],
+        "rows": ["KMO抽样适当性", "Bartlett χ²", "df", "Sig."]
+      },
+      {
+        "name": "communalities",
+        "columns": ["题项", "初始", "提取"],
+        "note": "提取方法: 主成分分析"
+      },
+      {
+        "name": "total_variance_explained",
+        "columns": ["成分", "初始特征值", "", "", "提取载荷平方和", "", "", "旋转载荷平方和", "", ""],
+        "sub_columns": ["", "总计", "方差%", "累计%", "总计", "方差%", "累计%", "总计", "方差%", "累计%"]
+      },
+      {
+        "name": "rotated_component_matrix",
+        "columns": ["题项", "成分1", "成分2", "..."],
+        "note": "旋转方法: Varimax, 提取方法: 主成分分析"
+      }
+    ]
+  },
+  {
+    "name": "regression_linear",
+    "spss_menu": "Analyze → Regression → Linear",
+    "description": "线性回归",
+    "tables": [
+      {
+        "name": "model_summary",
+        "columns": ["R", "R²", "调整R²", "标准误", "Durbin-Watson"]
+      },
+      {
+        "name": "anova",
+        "columns": ["来源", "平方和", "df", "均方", "F", "显著性"],
+        "rows": ["回归", "残差", "总计"]
+      },
+      {
+        "name": "coefficients",
+        "columns": ["变量", "B", "标准误", "Beta(标准化)", "t", "显著性", "VIF", "容忍度"]
+      }
+    ]
+  },
+  {
+    "name": "regression_logistic",
+    "spss_menu": "Analyze → Regression → Binary Logistic",
+    "description": "二分类Logistic回归",
+    "tables": [
+      {
+        "name": "omnibus_tests",
+        "columns": ["", "χ²", "df", "Sig."],
+        "rows": ["步骤", "块", "模型"]
+      },
+      {
+        "name": "model_summary",
+        "columns": ["-2 Log likelihood", "Cox & Snell R²", "Nagelkerke R²"]
+      },
+      {
+        "name": "variables_in_equation",
+        "columns": ["变量", "B", "S.E.", "Wald", "df", "Sig.", "Exp(B)", "95%CI下限", "95%CI上限"]
+      },
+      {
+        "name": "roc",
+        "columns": ["指标", "值"],
+        "rows": ["AUC", "最佳阈值", "灵敏度", "特异度", "Youden指数"]
+      }
+    ]
+  },
+  {
+    "name": "mediation",
+    "spss_menu": "PROCESS Macro (Hayes, 2018) Model 4",
+    "description": "中介效应分析 — Baron & Kenny + Sobel + Bootstrap",
+    "tables": [
+      {
+        "name": "model_summary",
+        "columns": ["路径", "β", "SE", "t", "p"],
+        "rows": ["c (总效应) X→Y", "a X→M", "b M→Y(控X)", "c' (直接效应) X→Y(控M)"]
+      },
+      {
+        "name": "indirect_effects",
+        "columns": ["效应", "值", "Boot SE", "Boot LLCI", "Boot ULCI"],
+        "rows": ["间接效应 (a×b)", "完全标准化间接效应"]
+      },
+      {
+        "name": "sobel_test",
+        "columns": ["指标", "值"],
+        "rows": ["间接效应", "SE", "Z", "p"]
+      }
+    ]
+  },
+  {
+    "name": "moderation",
+    "spss_menu": "PROCESS Macro (Hayes, 2018) Model 1",
+    "description": "调节效应分析 — 交互项 + 简单斜率",
+    "tables": [
+      {
+        "name": "model",
+        "columns": ["变量", "B", "SE", "t", "p", "LLCI", "ULCI"],
+        "rows": ["截距", "X(自变量)", "W(调节变量)", "X×W(交互项)"]
+      },
+      {
+        "name": "simple_slopes",
+        "columns": ["调节变量水平", "效应", "SE", "t", "p", "LLCI", "ULCI"],
+        "rows": ["低(-1SD)", "中(均值)", "高(+1SD)"]
+      }
+    ]
+  },
+  {
+    "name": "cluster_kmeans",
+    "spss_menu": "Analyze → Classify → K-Means Cluster",
+    "description": "K均值聚类分析",
+    "tables": [
+      {
+        "name": "cluster_distribution",
+        "columns": ["聚类", "样本量", "占比(%)"]
+      },
+      {
+        "name": "final_cluster_centers",
+        "columns": ["变量", "聚类1", "聚类2", "聚类3"],
+        "note": "标准化后均值"
+      },
+      {
+        "name": "anova",
+        "columns": ["变量", "聚类均方", "df", "误差均方", "df", "F", "Sig."]
+      }
+    ]
+  }
+]

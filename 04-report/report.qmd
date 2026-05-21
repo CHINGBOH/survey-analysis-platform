@@ -1,0 +1,197 @@
+---
+title: "问卷调查统计分析报告"
+subtitle: "调查一（208份，大学生为主）+ 调查二（205份，学生+在职混合）"
+author: "Survey Analysis Platform"
+date: last-modified
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: true
+    code-summary: "查看代码"
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r setup, include=FALSE}
+.libPaths(c("~/R/libs", .libPaths()))
+library(knitr)
+options(digits=4, knitr.kable.NA="")
+loaded <- readRDS("../output/results/compiled.rds")
+s1 <- loaded$s1; s2 <- loaded$s2
+```
+
+# 报告概览
+
+| 项目 | 调查一 | 调查二 |
+|------|--------|--------|
+| 样本量 | 208 | 205 |
+| 人群 | 大学生为主 | 学生+在职混合 |
+| 分析模块 | 12 | 12 |
+| 生成方式 | Survey Analysis Platform 自动管道 | 同 |
+
+---
+
+# 调查一
+
+## 信度分析
+
+```{r}
+rel1 <- s1$reliability
+if (!is.null(rel1$error)) { cat(rel1$error)
+} else {
+  cat(sprintf("Cronbach's alpha = %.4f (标准化: %.4f), Guttman lambda6 = %.4f, 题项数 = %d\n",
+    rel1$alpha_raw, rel1$alpha_std, rel1$guttman_l6, rel1$n_items))
+}
+```
+
+## 因子分析
+
+```{r}
+fa1 <- s1$factor_analysis
+if (!is.null(fa1$error)) { cat(fa1$error)
+} else {
+  cat(sprintf("KMO = %.4f, Bartlett chi2 = %.2f (df=%d)\n", fa1$kmo, fa1$bartlett_chi2, fa1$bartlett_df))
+  cat("\nVarimax旋转因子载荷:\n")
+  print(round(fa1$loadings_varimax, 4))
+}
+```
+
+## 相关分析
+
+```{r}
+cor1 <- s1$correlation
+if (!is.null(cor1$error)) { cat(cor1$error)
+} else {
+  kable(cor1$pearson, caption="Pearson相关矩阵")
+}
+```
+
+## t检验
+
+```{r}
+t1 <- s1$ttest
+if (!is.null(t1$error)) { cat(t1$error)
+} else {
+  cat(sprintf("单样本t(影响程度 vs 3): t=%.3f, p=%.4f\n", t1$one_sample$t, t1$one_sample$p))
+  cat(sprintf("独立样本t(性别×影响程度): t=%.3f, p=%.4f, d=%.4f\n",
+    t1$independent$t_val, t1$independent$t_p, t1$independent$cohens_d))
+  cat(sprintf("Mann-Whitney: W=%.0f, p=%.4f\n", t1$mann_whitney$W, t1$mann_whitney$p))
+}
+```
+
+## 方差分析
+
+```{r}
+a1 <- s1$anova
+if (!is.null(a1$error)) { cat(a1$error)
+} else {
+  cat(sprintf("ANOVA(年龄×影响程度): eta2=%.4f, omega2=%.4f\n", a1$anova$eta2, a1$anova$omega2))
+  cat(sprintf("Kruskal-Wallis: chi2=%.3f, p=%.4f\n", a1$kruskal$chi2, a1$kruskal$p))
+}
+```
+
+## 回归分析
+
+```{r}
+reg1 <- s1$regression
+if (!is.null(reg1$linear$error)) { cat("线性回归:", reg1$linear$error, "\n")
+} else {
+  cat(sprintf("线性回归: R2=%.4f, adjR2=%.4f, DW=%.3f\n", reg1$linear$r2, reg1$linear$adj_r2, reg1$linear$dw))
+}
+if (!is.null(reg1$logistic$error)) { cat("Logistic:", reg1$logistic$error, "\n")
+} else {
+  cat(sprintf("Logistic ROC: AUC=%.4f, 灵敏度=%.4f, 特异度=%.4f, Youden=%.4f\n",
+    reg1$logistic$auc, reg1$logistic$sensitivity, reg1$logistic$specificity, reg1$logistic$youden))
+}
+```
+
+## 中介效应
+
+```{r}
+med1 <- s1$mediation
+if (!is.null(med1$error)) { cat(med1$error)
+} else {
+  cat(sprintf("Baron&Kenny: c=%.4f, a=%.4f, b=%.4f, c'=%.4f\n",
+    med1$baron_kenny$c, med1$baron_kenny$a, med1$baron_kenny$b, med1$baron_kenny$cp))
+  cat(sprintf("Sobel: 间接效应=%.4f, Z=%.4f, p=%.4f\n", med1$sobel$ind, med1$sobel$z, med1$sobel$p))
+  cat(sprintf("Bootstrap 5000: 间接效应 95%%CI [%.4f, %.4f]\n", med1$bootstrap$ci_l, med1$bootstrap$ci_u))
+}
+```
+
+## 调节效应
+
+```{r}
+mod1 <- s1$moderation
+if (!is.null(mod1$error)) { cat(mod1$error)
+} else {
+  cat(sprintf("交互项 p=%.4f\n", mod1$interaction_p))
+  cat(sprintf("简单斜率 女性: beta=%.4f p=%.4f | 男性: beta=%.4f p=%.4f\n",
+    mod1$simple_slopes$female["b"], mod1$simple_slopes$female["p"],
+    mod1$simple_slopes$male["b"], mod1$simple_slopes$male["p"]))
+}
+```
+
+## 聚类分析
+
+```{r}
+cl1 <- s1$cluster
+if (!is.null(cl1$error)) { cat(cl1$error)
+} else {
+  cat(sprintf("K-Means 3群: 样本量=%s, LDA正确率=%.2f%%\n",
+    paste(cl1$kmeans$sizes, collapse="/"), cl1$lda_accuracy*100))
+}
+```
+
+---
+
+# 调查二
+
+```{r}
+rel2 <- s2$reliability
+if (!is.null(rel2$error)) cat(rel2$error) else cat(sprintf("信度 alpha=%.4f (n=%d题)\n", rel2$alpha_raw, rel2$n_items))
+
+fa2 <- s2$factor_analysis
+if (!is.null(fa2$error)) cat(fa2$error) else cat(sprintf("因子 KMO=%.4f\n", fa2$kmo))
+
+t2 <- s2$ttest
+if (!is.null(t2$error)) cat(t2$error) else cat(sprintf("性别t检验: t=%.3f p=%.4f d=%.4f\n", t2$independent$t_val, t2$independent$t_p, t2$independent$cohens_d))
+
+reg2 <- s2$regression
+if (!is.null(reg2$linear$error)) cat(reg2$linear$error) else cat(sprintf("线性回归 R2=%.4f\n", reg2$linear$r2))
+
+med2 <- s2$mediation
+if (!is.null(med2$error)) cat(med2$error) else cat(sprintf("中介效应 Sobel Z=%.4f p=%.4f, Bootstrap CI [%.4f,%.4f]\n", med2$sobel$z, med2$sobel$p, med2$bootstrap$ci_l, med2$bootstrap$ci_u))
+
+cl2 <- s2$cluster
+if (!is.null(cl2$error)) cat(cl2$error) else cat(sprintf("聚类: %s\n", paste(cl2$kmeans$sizes, collapse="/")))
+```
+
+---
+
+# 报价清单
+
+| 模块 | 指标 | 复杂度 | SPSS菜单 |
+|------|------|--------|----------|
+| 描述统计 | 频率+描述+正态性 | ★ | Frequencies/Descriptives/Explore |
+| 交叉表 | χ²+Phi+Cramer's V+Gamma | ★★ | Crosstabs |
+| t检验 | t+Levene+d+Mann-Whitney | ★★ | Compare Means |
+| ANOVA | F+η²/ω²+Tukey+MANOVA+Kruskal | ★★★ | GLM |
+| 相关 | Pearson+Spearman | ★★ | Bivariate |
+| 信度 | α+分半+Guttman λ₆ | ★★★ | Reliability |
+| 因子 | KMO+Bartlett+PCA+Varimax | ★★★★ | Factor |
+| 回归 | 线性+Logistic+ROC+AUC | ★★★★ | Regression |
+| 中介 | Baron&Kenny+Sobel+Bootstrap | ★★★★ | PROCESS宏 |
+| 调节 | 交互项+简单斜率 | ★★★★ | PROCESS宏 |
+| 聚类 | K-Means+判别 | ★★★★ | Classify |
+| 高级 | Bootstrap+Power | ★★★★ | Bootstrap |
+
+**报告生成:** `r Sys.Date()` | **管道:** Excel→SQLite→R(12模块)→Quarto
+
+```{r, include=FALSE}
+cat("Platform: https://github.com/.../survey-analysis-platform\n")
+```
