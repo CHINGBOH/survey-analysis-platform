@@ -135,9 +135,8 @@ def list_all_surveys():
 def pipeline_status():
     """整体管道状态 — stage / 模块进度 / 已完成 / plan."""
     active = _STATE.active_survey_id or default_survey()
-    stage_val = _STATE.stage.value if hasattr(_STATE.stage, "value") else str(_STATE.stage)
     return {
-        "stage": stage_val,
+        "stage": _STATE.stage.value,
         "active_survey_id": active,
         "uploaded_filename": _STATE.uploaded_filename,
         "clean_done": _STATE.clean_done,

@@ -14,6 +14,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from app.requirements_schema import AnalysisPlan
+from app.state import PipelineStage
 from app.surveys import default_survey, derive_survey_id, list_surveys, survey_suffix as _suffix_lookup
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -248,7 +249,7 @@ def run_clean(target: str = "all", source_file: str = None, state=None) -> Dict:
         if len(plan_surveys) == 1:
             target = plan_surveys[0]
     if state:
-        state.stage = "cleaning"
+        state.stage = PipelineStage.CLEANING
     cmd = ["python3", "01-clean/clean_to_sqlite.py", target]
     if source_file:
         if target == "all":
@@ -259,7 +260,7 @@ def run_clean(target: str = "all", source_file: str = None, state=None) -> Dict:
         return _err(f"清洗失败 (exit {rc}): {stderr[-500:]}", detail=stderr)
     if state:
         state.clean_done = True
-        state.stage = "uploaded"
+        state.stage = PipelineStage.UPLOADED
     lines = [l for l in stdout.splitlines() if l.strip()]
     summary = "\n".join(lines[-6:]) if lines else "完成"
     return _ok(
@@ -291,7 +292,7 @@ def run_generic_ingest(survey_id: str, source_file: str, state=None) -> Dict:
     if not src.exists():
         return _err(f"源文件不存在: {src}")
     if state:
-        state.stage = "cleaning"
+        state.stage = PipelineStage.CLEANING
     rc, stdout, stderr = _run(
         ["python3", "01-clean/generic_ingest.py", survey_id,
          "--source-file", str(src)]
@@ -300,7 +301,7 @@ def run_generic_ingest(survey_id: str, source_file: str, state=None) -> Dict:
         return _err(f"通用入库失败 (exit {rc}): {stderr[-500:]}", detail=stderr)
     if state:
         state.clean_done = True
-        state.stage = "uploaded"
+        state.stage = PipelineStage.UPLOADED
     lines = [l for l in stdout.splitlines() if l.strip()]
     summary = "\n".join(lines[-6:]) if lines else "完成"
     return _ok(
@@ -440,7 +441,7 @@ def run_compile(state=None) -> Dict:
     """Run compile.R to merge all .rds files into compiled.rds."""
     OUTPUT_RESULTS.mkdir(parents=True, exist_ok=True)
     if state:
-        state.stage = "compiling"
+        state.stage = PipelineStage.COMPILING
     rc, stdout, stderr = _run(["Rscript", "03-integrate/compile.R"])
     if rc != 0:
         return _err(f"整合失败 (exit {rc})", detail=stderr[-500:])
@@ -448,7 +449,7 @@ def run_compile(state=None) -> Dict:
     if not compiled.exists():
         return _err("compiled.rds 未生成，请检查日志")
     if state:
-        state.stage = "uploaded"
+        state.stage = PipelineStage.UPLOADED
     lines = [l for l in stdout.splitlines() if l.strip()]
     return _ok(
         f"结果整合完成: {lines[-1] if lines else 'compiled.rds'}",
@@ -469,7 +470,7 @@ def run_report(state=None) -> Dict:
 
     OUTPUT_REPORTS.mkdir(parents=True, exist_ok=True)
     if state:
-        state.stage = "reporting"
+        state.stage = PipelineStage.REPORTING
 
     rc, stdout, stderr = _run(
         ["quarto", "render", "04-report/report.qmd", "--to", "html"],
@@ -483,7 +484,7 @@ def run_report(state=None) -> Dict:
     if report_html.exists():
         if state:
             state.report_path = str(report_html)
-            state.stage = "done"
+            state.stage = PipelineStage.DONE
         return _ok(
             "HTML 报告生成成功",
             artifacts={"report_html": str(report_html)},
@@ -531,7 +532,7 @@ def check_pipeline_status(state=None) -> Dict:
             if s == "done":
                 state.set_module(mod, "done")
         if compiled and report:
-            state.stage = "done"
+            state.stage = PipelineStage.DONE
             state.report_path = str(ROOT / "04-report" / "report.html")
 
     scope = "+".join(plan_surveys)

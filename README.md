@@ -99,19 +99,36 @@ cp .env.example .env       # 若已存在 .env 跳过
 `.env` 已被 `.gitignore` 排除,不会提交。`app/main.py` 启动时通过
 `python-dotenv` 自动加载,**无需每次 `export`**。
 
-### 1. 启动 Streamlit 应用(推荐)
+### 1. 启动 Next.js 前端 (推荐)
+
+```bash
+# 后端 (FastAPI :8765)
+make api                                  # 等价: uvicorn app.api:app --reload --port 8765
+
+# 前端 (Next.js :3000)
+make web-dev                              # 开发模式 (Turbopack)
+# 或生产模式:
+cd web && npx next build && npx next start --port 3000
+```
+
+浏览器打开 <http://localhost:3000>。架构: Next.js 16 + React 19 + Tailwind v4,通过 `next.config.js` rewrite 将 `/api/*` 反代到 :8765。
+
+5 个 tab:
+- **💬 分析助手** — SSE 流式聊天 (DeepSeek + tool calling),工具卡片自动合并
+- **📁 数据** — 已发现 survey 列表 + 上传 (xlsx/csv)
+- **📊 分析模块** — 13 个模块按 SPSS 分类分组,直接触发 `/api/run/{tool}`
+- **🖼️ 图表画廊** — 模块切换 + 灯箱预览
+- **📄 报告中心** — Word/PDF/图片包 生成与下载
+
+> ⚠️ Next.js 16 Turbopack dev 模式在 headless Playwright 下偶有 hydration 异常;E2E 测试请使用 `next build && next start`。
+
+### 2. 启动 Streamlit 应用 (legacy fallback)
 
 ```bash
 streamlit run app/main.py --server.port 8501
-# 浏览器打开 http://localhost:8501
 ```
 
-界面 5 个 tab:
-- **💬 分析助手** — 自然语言驱动 Agent,自动编排清洗→分析→报告
-- **📁 数据** — SQLite 数据库浏览,分页 + 列筛选
-- **📊 分析模块** — 13 个模块卡片,一键运行
-- **🖼️ 图表画廊** — 缩略图/单图/幻灯片/Plotly 交互预览
-- **📄 报告中心** — HTML/Word/PDF/图片包 生成与下载
+> Streamlit 仍可用作备份 UI,但新功能与图表渲染优化只在 Next.js 前端实现。
 
 ### 2. 命令行管道(无 LLM)
 

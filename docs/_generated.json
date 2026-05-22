@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-23 04:18:39",
-  "git": "e9f0042",
+  "generated_at": "2026-05-23 05:01:16",
+  "git": "2e9241a",
   "generators": {
     "tools": {
       "status": "ok",
-      "duration_ms": 565
+      "duration_ms": 540
     },
     "skills": {
       "status": "ok",
@@ -12,7 +12,7 @@
     },
     "subagents": {
       "status": "ok",
-      "duration_ms": 2
+      "duration_ms": 3
     },
     "modules": {
       "status": "ok",
@@ -20,19 +20,23 @@
     },
     "python_api": {
       "status": "ok",
-      "duration_ms": 32
+      "duration_ms": 30
+    },
+    "rest_api": {
+      "status": "ok",
+      "duration_ms": 127
     },
     "r_api": {
       "status": "ok",
-      "duration_ms": 7
+      "duration_ms": 6
     },
     "architecture": {
       "status": "ok",
-      "duration_ms": 137
+      "duration_ms": 616
     },
     "database": {
       "status": "ok",
-      "duration_ms": 4
+      "duration_ms": 2
     }
   }
 }
