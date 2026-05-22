@@ -17,6 +17,9 @@ from app.agent import run_agent_turn
 from app.state import AppState, PipelineStage
 from app.ui.chat import render_message_history, render_tool_event_live
 from app.ui.sidebar import render_sidebar
+from app.ui.pages import (
+    render_data_page, render_charts_page, render_reports_page, render_analyses_page,
+)
 
 st.set_page_config(
     page_title="Survey Analysis Platform",
@@ -58,7 +61,9 @@ if not st.session_state.api_key_ok:
     st.stop()
 
 # ── Main area ─────────────────────────────────────────────────────
-tab_chat, tab_report = st.tabs(["💬 分析助手", "📄 查看报告"])
+tab_chat, tab_data, tab_analysis, tab_charts, tab_report = st.tabs(
+    ["💬 分析助手", "📁 数据", "📊 分析模块", "🖼️ 图表画廊", "📄 报告中心"]
+)
 
 with tab_chat:
     # Welcome message (shown once, not stored in API messages)
@@ -128,37 +133,14 @@ with tab_chat:
         st.rerun()
 
 # ── Report tab ────────────────────────────────────────────────────
+with tab_data:
+    render_data_page(state)
+
+with tab_analysis:
+    render_analyses_page(state, api_messages)
+
+with tab_charts:
+    render_charts_page(state)
+
 with tab_report:
-    report_path = state.report_path and Path(state.report_path)
-    if report_path and report_path.exists():
-        st.success(f"报告路径: `{report_path.relative_to(ROOT)}`")
-
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            with open(report_path, "rb") as f:
-                st.download_button(
-                    "⬇️ 下载 HTML 报告",
-                    data=f,
-                    file_name="survey_analysis_report.html",
-                    mime="text/html",
-                    use_container_width=True,
-                )
-        with col2:
-            if st.button("🔄 重新生成报告", use_container_width=True):
-                api_messages.append(
-                    {"role": "user", "content": "请重新运行 run_compile 和 run_report。"}
-                )
-                st.rerun()
-
-        # Embedded iframe preview
-        st.subheader("报告预览")
-        html_content = report_path.read_text(encoding="utf-8")
-        components.html(html_content, height=900, scrolling=True)
-    else:
-        st.info("报告尚未生成。完成分析后，报告将显示在这里。")
-        if state.stage not in (PipelineStage.IDLE, PipelineStage.UPLOADED):
-            if st.button("生成报告"):
-                api_messages.append(
-                    {"role": "user", "content": "请立即整合结果并生成报告。"}
-                )
-                st.rerun()
+    render_reports_page(state, api_messages, ROOT)

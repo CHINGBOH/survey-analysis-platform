@@ -698,3 +698,50 @@ def render_charts(module: str, survey_id: str = "survey1", state=None) -> Dict:
             "interpret_results 生成结构化解读以配合图表",
         ],
     )
+
+
+# ─── 报告生成工具 (Word / PDF / 图片包) ─────────────────────
+def generate_word(template: str = "standard", survey_id: str = "survey1",
+                  title: str = "问卷调查分析报告", org_name: str = "调查分析平台") -> dict:
+    """生成 Word 报告 (.docx)"""
+    from app.reports import generate_word_report, export_results_to_json
+    suffix = "s1" if survey_id == "survey1" else "s2" if survey_id == "survey2" else survey_id
+    export_results_to_json(suffix)
+    res = generate_word_report(template=template, survey_label=suffix,
+                                title=title, org_name=org_name)
+    if not res.get("ok"):
+        return _err(res.get("error", "Word 生成失败"))
+    return _ok(f"Word 报告已生成 ({template})",
+               artifacts={"path": res["path"], "template": template, "modules": res["modules"]},
+               next_actions=["可下载 / 在 UI 预览", "preview_report 渲染缩略图"])
+
+
+def generate_pdf(template: str = "standard", survey_id: str = "survey1") -> dict:
+    """生成 PDF 报告"""
+    from app.reports import generate_pdf_report, export_results_to_json
+    suffix = "s1" if survey_id == "survey1" else "s2" if survey_id == "survey2" else survey_id
+    export_results_to_json(suffix)
+    res = generate_pdf_report(template=template, survey_label=suffix)
+    if not res.get("ok"):
+        return _err(res.get("error", "PDF 生成失败"))
+    return _ok(f"PDF 报告已生成 ({template}, 引擎={res.get('engine')})",
+               artifacts={"path": res["path"], "engine": res["engine"]},
+               next_actions=["preview_report 嵌入预览"])
+
+
+def export_charts_bundle(survey_id: str = "survey1") -> dict:
+    """打包导出所有图表 + 缩略图 PDF"""
+    from app.reports import export_image_bundle
+    suffix = "s1" if survey_id == "survey1" else "s2" if survey_id == "survey2" else survey_id
+    res = export_image_bundle(suffix)
+    return _ok(f"图片包已打包: {res['n_images']} 张图 / {res['n_modules']} 模块",
+               artifacts={"zip": res["zip"], "dir": res["dir"], "n": res["n_images"]})
+
+
+def list_report_templates() -> dict:
+    """列出可用报告模板"""
+    from app.reports import list_templates
+    tpls = list_templates()
+    return _ok(f"{len(tpls)} 套模板",
+               artifacts={"templates": tpls},
+               next_actions=["generate_word(template='...') / generate_pdf(template='...')"])

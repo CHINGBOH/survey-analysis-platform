@@ -27,7 +27,9 @@ class Phase(str, Enum):
 
 
 # Always available regardless of phase — diagnostics + result reading + 协作
-_UNIVERSAL = {"read_log", "check_pipeline_status", "get_results", "dispatch_subagent", "interpret_results", "render_charts"}
+_UNIVERSAL = {"read_log", "check_pipeline_status", "get_results", "dispatch_subagent",
+              "interpret_results", "render_charts",
+              "list_report_templates", "generate_word", "generate_pdf", "export_charts_bundle"}
 
 # Tools exposed per phase (union with _UNIVERSAL).
 # set_analysis_plan is available in early phases so the agent can (re)confirm intent.

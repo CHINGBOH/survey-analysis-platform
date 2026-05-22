@@ -29,3 +29,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 output/charts/
+
+# Report artefacts (large binaries)
+output/reports/*.docx
+output/reports/*.pdf
+output/reports/*.zip
+output/reports/images_*/
+
+output/results/*.json

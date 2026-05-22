@@ -28,9 +28,13 @@ from app.skill_loader import build_catalogue_block
 from app.tools import (
     check_pipeline_status,
     dispatch_subagent,
+    export_charts_bundle,
+    generate_pdf,
+    generate_word,
     get_results,
     get_variable_catalog,
     interpret_results,
+    list_report_templates,
     preview_data,
     read_log,
     render_charts,
@@ -283,7 +287,8 @@ TOOL_DEFS = [
             "description": (
                 "把指定模块的 RDS 渲染为 PNG 图表包(ggplot2),输出到 output/charts/<module>_<sid>/。"
                 "支持模块: descriptives(饼图/柱状/直方/Q-Q)、crosstabs(分组柱状)、correlation(热力图)、"
-                "ttest(箱线图)、regression(系数森林图)。"
+                "ttest(箱线图)、regression(系数森林图)、factor_analysis(碎石/载荷)、cluster(簇规模/中心)、"
+                "reliability(项-总相关)、survey_specific(Likert/NPS/缺失/情感)。"
                 "返回 manifest 含每张图的 file/title/type,可在 UI 预览或嵌入报告。"
             ),
             "parameters": {
@@ -293,6 +298,57 @@ TOOL_DEFS = [
                     "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
                 },
                 "required": ["module"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_report_templates",
+            "description": "列出可用报告模板 (minimal/standard/full),含模块列表与是否含图表。",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_word",
+            "description": "生成 Word 报告 (.docx),含封面/目录/各模块表格+图表。需先 run_compile。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "template": {"type": "string", "enum": ["minimal", "standard", "full"], "description": "模板"},
+                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
+                    "title": {"type": "string"},
+                    "org_name": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_pdf",
+            "description": "生成 PDF 报告 (优先 Quarto+xelatex; 退化 reportlab + Noto CJK 中文)。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "template": {"type": "string", "enum": ["minimal", "standard", "full"]},
+                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "export_charts_bundle",
+            "description": "把所有图表打包成 zip + 缩略图 PDF 清单,按模块分子目录。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
+                },
             },
         },
     },
@@ -367,6 +423,20 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
             module=inputs["module"],
             survey_id=inputs.get("survey_id", "survey1"),
             state=state,
+        ),
+        "list_report_templates": lambda: list_report_templates(),
+        "generate_word": lambda: generate_word(
+            template=inputs.get("template", "standard"),
+            survey_id=inputs.get("survey_id", "survey1"),
+            title=inputs.get("title", "问卷调查分析报告"),
+            org_name=inputs.get("org_name", "调查分析平台"),
+        ),
+        "generate_pdf": lambda: generate_pdf(
+            template=inputs.get("template", "standard"),
+            survey_id=inputs.get("survey_id", "survey1"),
+        ),
+        "export_charts_bundle": lambda: export_charts_bundle(
+            survey_id=inputs.get("survey_id", "survey1"),
         ),
     }
     fn = fns.get(name)
