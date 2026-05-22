@@ -71,7 +71,7 @@ TOOL_DEFS = [
                     "modules": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "要运行的模块列表，或 ['all'] 表示全部 12 个",
+                        "description": "要运行的模块列表 (13 个可选: descriptives, crosstabs, ttest, anova, correlation, reliability, factor_analysis, regression, mediation, moderation, cluster, power_bootstrap, survey_specific),或 ['all'] 表示全部 13 个",
                     },
                     "compare": {
                         "type": "boolean",

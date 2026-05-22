@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 KNOWN_MODULES = [
     "descriptives", "crosstabs", "ttest", "anova", "correlation",
     "reliability", "factor_analysis", "regression", "mediation",
-    "moderation", "cluster", "power_bootstrap",
+    "moderation", "cluster", "power_bootstrap", "survey_specific",
 ]
 KNOWN_SURVEYS = ["survey1", "survey2"]
 

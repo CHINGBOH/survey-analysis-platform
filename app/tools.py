@@ -269,6 +269,7 @@ VALID_MODULES = [
     "descriptives", "crosstabs", "ttest", "anova", "correlation",
     "reliability", "factor_analysis", "regression",
     "mediation", "moderation", "cluster", "power_bootstrap",
+    "survey_specific",
 ]
 
 

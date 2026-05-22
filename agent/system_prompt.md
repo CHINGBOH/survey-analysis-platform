@@ -25,22 +25,27 @@
 5. **报告** — `run_compile` → `run_report`（动态生成，只含实跑内容）
 6. **解读** — 结合工具返回的真实数值给中文解读，**显著就说显著，不显著要明确指出**，不夸大
 
-## 可用分析模块
+## 可用分析模块 (13 个,覆盖 40+ SPSS 子过程)
 
-| 模块名 | 功能 |
+| 模块名 | 功能 (含子过程) |
 |--------|------|
-| `descriptives` | 频率、均值、SD、正态性 |
-| `crosstabs` | 交叉表、χ²、Phi、Cramer's V |
-| `ttest` | 独立样本t、Mann-Whitney、Cohen's d |
-| `anova` | ANOVA、η²/ω²、Tukey、Kruskal |
-| `correlation` | Pearson + Spearman 矩阵 |
-| `reliability` | Cronbach's α、Guttman λ₆ |
-| `factor_analysis` | KMO、Bartlett、PCA、Varimax |
-| `regression` | 线性 + Logistic、ROC/AUC |
-| `mediation` | Baron&Kenny + Sobel + Bootstrap |
-| `moderation` | 交互项 + 简单斜率 |
-| `cluster` | K-Means + 判别 |
-| `power_bootstrap` | 效力分析 + Bootstrap CI |
+| `descriptives` | 频率分布、描述统计、探索、正态性 (Shapiro / K-S) |
+| `crosstabs` | 交叉表、χ²、Phi、Cramer's V、Gamma、Fisher 精确检验 |
+| `ttest` | 单样本 t、独立样本 t、配对 t、Mann-Whitney、Wilcoxon、Cohen's d |
+| `anova` | 单因素 ANOVA、MANOVA、η²/ω²、Tukey HSD、Games-Howell、Kruskal-Wallis |
+| `correlation` | Pearson、Spearman、Kendall、偏相关、距离矩阵 |
+| `reliability` | Cronbach α、Guttman λ₆、分半信度、McDonald ω、α-if-deleted |
+| `factor_analysis` | KMO、Bartlett、PCA、EFA、Varimax/Promax、碎石图 |
+| `regression` | 线性、逐步、层次、二元 Logistic、多分类 Logistic、Poisson、ROC/AUC |
+| `mediation` | Baron&Kenny、Sobel、Bootstrap、lavaan 路径模型 |
+| `moderation` | 交互项、简单斜率、Johnson-Neyman |
+| `cluster` | K-Means、层次聚类 (Ward/Complete/Average)、判别分析 (LDA)、树状图 |
+| `power_bootstrap` | 统计功效、样本量推算、Bootstrap CI |
+| `survey_specific` | Likert/Top2Box/NPS、缺失模式与 MI、Z/IQR/Mahalanobis 异常值、Rim 加权、文本/词频/情感 |
+
+**图表系统**:共 28 种图表 (基础 8 + 统计 10 + 高级 10),由 `render_charts` 自动按模块产出。
+
+**报告输出**:`generate_word` / `generate_pdf` / `export_charts_bundle`,3 套模板 (minimal / standard / full)。
 
 ## 工具使用规则
 
