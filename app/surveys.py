@@ -63,10 +63,6 @@ def list_surveys() -> List[str]:
     if RAW_DIR.exists():
         for f in sorted(list(RAW_DIR.glob("*.xlsx")) + list(RAW_DIR.glob("*.csv"))):
             _add(derive_survey_id(f.name))
-    # 仅在完全为空时回退到模板槽 (避免单源上传时幻影展示 survey1+survey2)
-    if not seen:
-        for s in _TEMPLATE_SLOTS:
-            _add(s)
     return seen
 
 
