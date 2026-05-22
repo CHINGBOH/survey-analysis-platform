@@ -108,3 +108,11 @@ docs:
 docs-check:
 	@$(MAKE) --no-print-directory docs > /dev/null
 	@git diff --quiet --exit-code docs/ && echo "✓ docs/ 与代码同步" || (echo "❌ docs/ 有未提交变更，请运行 'make docs' 后 commit"; git --no-pager diff --stat docs/; exit 1)
+
+# ====== E2E 冒烟测试 ======
+smoke-setup:
+	@cd scripts/smoke && npm install --silent
+
+smoke:
+	@echo "前置: FastAPI :8765 + Next.js prod :3000 必须先启动"
+	@node scripts/smoke/run.mjs $(FILE)

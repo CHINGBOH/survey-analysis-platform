@@ -1,0 +1,11 @@
+{
+  "name": "survey-smoke",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke": "node run.mjs"
+  },
+  "dependencies": {
+    "playwright-chromium": "^1.48.0"
+  }
+}
