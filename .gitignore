@@ -1,8 +1,13 @@
 # Generated outputs
 output/results/*.rds
+output/results/plan.json
 output/reports/*.html
 04-report/report.html
 04-report/report_files/
+
+# Runtime logs
+logs/*.log
+logs/*.jsonl
 
 # SQLite databases (reproducible from raw data)
 data/db/*.db
