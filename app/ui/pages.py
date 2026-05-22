@@ -107,7 +107,7 @@ def render_charts_page(state):
         st.warning("该模块无图表"); return
 
     # 查看模式
-    mode = st.radio("视图", ["缩略图网格", "单图大图", "幻灯片"], horizontal=True, key="gallery_mode")
+    mode = st.radio("视图", ["缩略图网格", "单图大图", "幻灯片", "交互预览"], horizontal=True, key="gallery_mode")
     if mode == "缩略图网格":
         cols = st.columns(3)
         for i, p in enumerate(pngs):
@@ -118,10 +118,91 @@ def render_charts_page(state):
     elif mode == "单图大图":
         sel = st.selectbox("选择图", [p.name for p in pngs], key="single_chart")
         st.image(str(cdir / sel), use_container_width=True)
-    else:
+    elif mode == "幻灯片":
         idx = st.number_input("第几张", 1, len(pngs), 1, key="slide_idx")
         p = pngs[idx - 1]
         st.image(str(p), caption=f"{idx}/{len(pngs)} — {p.stem}", use_container_width=True)
+    else:
+        _render_interactive(selected_dir)
+
+
+def _render_interactive(module: str):
+    """从 RDS-derived JSON 构造 plotly 交互图。"""
+    import pandas as pd
+    import plotly.express as px
+    json_path = OUTPUT / "results" / f"{module}_s1.json"
+    if not json_path.exists():
+        # 尝试现场转换
+        rds = OUTPUT / "results" / f"{module}_s1.rds"
+        if rds.exists():
+            if st.button("⚙️ 生成交互数据 (RDS→JSON)", key=f"conv_{module}"):
+                import subprocess
+                subprocess.run(["Rscript", str(ROOT / "02-analyze" / "rds_to_json.R"),
+                                str(rds), "500"], cwd=str(ROOT))
+                st.rerun()
+        st.info("尚无交互数据。请先点击上方按钮生成,或运行 export_results_to_json。")
+        return
+
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        st.error(f"读取 JSON 失败: {e}"); return
+
+    # 自动找出可绘制 data.frame (list of dicts)
+    candidates = []
+    def _walk(obj, prefix=""):
+        if isinstance(obj, list) and obj and all(isinstance(x, dict) for x in obj):
+            candidates.append((prefix or "root", obj))
+        elif isinstance(obj, dict):
+            for k, v in obj.items():
+                _walk(v, f"{prefix}/{k}" if prefix else k)
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                _walk(v, f"{prefix}[{i}]")
+    _walk(data)
+
+    if not candidates:
+        st.warning("此模块无表格型数据可作图。"); 
+        with st.expander("查看原始 JSON"):
+            st.json(data)
+        return
+
+    names = [c[0] for c in candidates]
+    sel = st.selectbox("数据表", names, key=f"int_tbl_{module}")
+    rows = dict(candidates)[sel]
+    df = pd.DataFrame(rows)
+    if df.empty:
+        st.warning("空表"); return
+
+    st.dataframe(df, use_container_width=True, height=200)
+
+    cols = list(df.columns)
+    num_cols = [c for c in cols if pd.api.types.is_numeric_dtype(df[c])]
+    chart_type = st.selectbox("图类型", ["bar", "line", "scatter", "box", "histogram", "pie"],
+                              key=f"int_ct_{module}")
+    c1, c2, c3 = st.columns(3)
+    x = c1.selectbox("X", cols, key=f"int_x_{module}")
+    y = c2.selectbox("Y", num_cols or cols, key=f"int_y_{module}") if chart_type != "histogram" else None
+    color = c3.selectbox("分组色", ["(无)"] + cols, key=f"int_c_{module}")
+    color_arg = None if color == "(无)" else color
+
+    try:
+        if chart_type == "bar":
+            fig = px.bar(df, x=x, y=y, color=color_arg)
+        elif chart_type == "line":
+            fig = px.line(df, x=x, y=y, color=color_arg, markers=True)
+        elif chart_type == "scatter":
+            fig = px.scatter(df, x=x, y=y, color=color_arg)
+        elif chart_type == "box":
+            fig = px.box(df, x=x, y=y, color=color_arg)
+        elif chart_type == "histogram":
+            fig = px.histogram(df, x=x, color=color_arg)
+        else:
+            fig = px.pie(df, names=x, values=y)
+        fig.update_layout(template="plotly_white", height=500)
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"绘图失败: {e}")
 
 
 # ─── 报告中心 ───────────────────────────────────────────
