@@ -1,7 +1,7 @@
 # Makefile — 问卷数据分析管道编排
 # 用法: make all | make clean | make analyze | make report
 
-.PHONY: all clean analyze integrate report lint explore app help
+.PHONY: all clean analyze integrate report lint explore app help docs docs-check
 
 # 默认目标
 all: clean analyze integrate report
@@ -77,3 +77,12 @@ db_info:
 clean_output:
 	rm -f output/results/*.rds
 	rm -f output/reports/*.html
+
+# ====== 自动文档生成 ======
+docs:
+	@echo "重生成所有技术文档 (docs/)..."
+	@python3 scripts/docs/gen_all.py
+
+docs-check:
+	@$(MAKE) --no-print-directory docs > /dev/null
+	@git diff --quiet --exit-code docs/ && echo "✓ docs/ 与代码同步" || (echo "❌ docs/ 有未提交变更，请运行 'make docs' 后 commit"; git --no-pager diff --stat docs/; exit 1)
