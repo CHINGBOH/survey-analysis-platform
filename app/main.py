@@ -36,6 +36,9 @@ def _init_state():
         st.session_state.display_messages = []
     if "api_key_ok" not in st.session_state:
         st.session_state.api_key_ok = bool(os.environ.get("DEEPSEEK_API_KEY"))
+    if "trace_session_id" not in st.session_state:
+        import uuid
+        st.session_state.trace_session_id = f"sap-{uuid.uuid4().hex[:12]}"
 
 
 _init_state()
@@ -91,7 +94,12 @@ with tab_chat:
             text_placeholder = st.empty()
 
             try:
-                for evt in run_agent_turn(api_messages, state):
+                for evt in run_agent_turn(
+                    api_messages,
+                    state,
+                    session_id=st.session_state.trace_session_id,
+                    user_id=os.environ.get("USER") or "anonymous",
+                ):
                     events_collected.append(evt)
                     if evt["type"] == "text":
                         final_text = evt["content"]

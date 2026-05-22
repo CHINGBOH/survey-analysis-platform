@@ -20,7 +20,7 @@ langfuse 4.x 基于 OpenTelemetry,API:
 from __future__ import annotations
 
 import os
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from typing import Any, Optional
 
 
@@ -33,6 +33,11 @@ def _init_langfuse():
     """
     if not (os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")):
         return None
+    host = (
+        os.environ.get("LANGFUSE_HOST")
+        or os.environ.get("LANGFUSE_BASE_URL")
+        or "https://cloud.langfuse.com"
+    )
     try:
         saved = {}
         for k in ("ALL_PROXY", "all_proxy"):
@@ -43,7 +48,7 @@ def _init_langfuse():
             return Langfuse(
                 public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
                 secret_key=os.environ["LANGFUSE_SECRET_KEY"],
-                host=os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+                host=host,
             )
         finally:
             os.environ.update(saved)
@@ -90,28 +95,102 @@ class _NullSpan:
 _NULL_SPAN = _NullSpan()
 
 
-def start_turn(name: str, user_input: str, metadata: Optional[dict] = None) -> Any:
-    """开启一个对话轮 root observation(隐式建 trace)。"""
+class _TurnHandle:
+    """Holds the root agent observation plus an ExitStack for trace attrs."""
+    __slots__ = ("span", "stack")
+
+    def __init__(self, span: Any, stack: ExitStack) -> None:
+        self.span = span
+        self.stack = stack
+
+
+def start_turn(
+    name: str,
+    user_input: str,
+    metadata: Optional[dict] = None,
+    session_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    tags: Optional[list] = None,
+) -> Any:
+    """开启一个对话轮 root observation(隐式建 trace)。
+
+    session_id 把同一对话的多轮 trace 串到 Langfuse Sessions 视图。
+    user_id 用于按用户过滤/归集成本。
+    tags 用于按功能/租户切片(如 ['survey-chat'])。
+
+    返回 _TurnHandle(失败/未启用时返回 _NULL_SPAN)。
+    """
     if not _LANGFUSE_ENABLED or _langfuse_client is None:
         return _NULL_SPAN
+    stack = ExitStack()
     try:
-        span = _langfuse_client.start_observation(
-            name=name,
-            as_type="agent",
-            input=user_input,
-            metadata=metadata or {},
+        # propagate_attributes 必须包住 start_observation 才能让 trace 继承属性
+        try:
+            from langfuse import propagate_attributes  # type: ignore
+            attrs: dict = {}
+            if session_id:
+                attrs["session_id"] = session_id
+            if user_id:
+                attrs["user_id"] = user_id
+            if tags:
+                attrs["tags"] = tags
+            if attrs:
+                stack.enter_context(propagate_attributes(**attrs))
+        except Exception:
+            pass
+        # 用 start_as_current_observation 进入 OTel context,这样
+        # langfuse.openai 自动把 LLM 调用挂到当前 trace 下,而不是新开 trace
+        span = stack.enter_context(
+            _langfuse_client.start_as_current_observation(
+                name=name,
+                as_type="agent",
+                input=user_input,
+                metadata=metadata or {},
+            )
         )
-        return span
+        return _TurnHandle(span, stack)
     except Exception:
+        try:
+            stack.close()
+        except Exception:
+            pass
         return _NULL_SPAN
 
 
-def end_turn(span: Any, output: Any = None, status: str = "ok") -> None:
-    if span is _NULL_SPAN or span is None:
+def _unwrap(handle: Any) -> Any:
+    """Extract underlying span from _TurnHandle or pass through."""
+    if isinstance(handle, _TurnHandle):
+        return handle.span
+    return handle
+
+
+def end_turn(handle: Any, output: Any = None, status: str = "ok") -> None:
+    if handle is _NULL_SPAN or handle is None:
         return
+    span = _unwrap(handle)
     try:
-        span.update(output=output)
-        span.end()
+        if status != "ok":
+            try:
+                span.update(output=output, level="ERROR", status_message=str(status))
+            except Exception:
+                span.update(output=output)
+        else:
+            span.update(output=output)
+    except Exception:
+        pass
+    # 关闭 ExitStack 会触发 start_as_current_observation 的 __exit__,
+    # 自动 .end() span 并恢复 OTel context
+    if isinstance(handle, _TurnHandle):
+        try:
+            handle.stack.close()
+        except Exception:
+            pass
+    else:
+        try:
+            span.end()
+        except Exception:
+            pass
+    try:
         if _langfuse_client is not None:
             _langfuse_client.flush()
     except Exception:
@@ -120,13 +199,14 @@ def end_turn(span: Any, output: Any = None, status: str = "ok") -> None:
 
 @contextmanager
 def record_tool_call(parent: Any, tool_name: str, inputs: dict):
-    if parent is _NULL_SPAN or parent is None or not _LANGFUSE_ENABLED:
+    parent_span = _unwrap(parent)
+    if parent_span is _NULL_SPAN or parent_span is None or not _LANGFUSE_ENABLED:
         with nullcontext(_NULL_SPAN) as s:
             yield s
         return
     child: Any = _NULL_SPAN
     try:
-        child = parent.start_observation(name=f"tool:{tool_name}", as_type="tool", input=inputs)
+        child = parent_span.start_observation(name=f"tool:{tool_name}", as_type="tool", input=inputs)
     except Exception:
         child = _NULL_SPAN
     try:

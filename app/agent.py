@@ -5,7 +5,7 @@ ReAct pattern: reason → call tool → observe → repeat until stop.
 import json
 import os
 from pathlib import Path
-from typing import Any, Generator, cast
+from typing import Any, Generator, Optional, cast
 
 from openai import OpenAI
 
@@ -334,7 +334,7 @@ def _make_client() -> OpenAI:
 
 
 def run_agent_turn(
-    api_messages: list, state
+    api_messages: list, state, *, session_id: Optional[str] = None, user_id: Optional[str] = None,
 ) -> Generator[dict, None, None]:
     """
     Generator — yields events during one conversational turn.
@@ -342,6 +342,9 @@ def run_agent_turn(
 
     Mutates api_messages in-place (appends new assistant + tool turns).
     api_messages uses OpenAI message format throughout.
+
+    session_id: Streamlit 会话 id,把同一对话多轮串到 Langfuse Sessions
+    user_id: 当前操作者,Langfuse Users 视图聚合
     """
     client = _make_client()
     base_system = _load_system_prompt()
@@ -357,9 +360,16 @@ def run_agent_turn(
             p.get("text", "") for p in last_user_msg if isinstance(p, dict)
         )
     turn_trace = start_turn(
-        name="agent_turn",
+        name="survey-analysis.chat-turn",
         user_input=str(last_user_msg)[:500],
-        metadata={"model": MODEL, "langfuse_enabled": langfuse_enabled()},
+        metadata={
+            "model": MODEL,
+            "phase": getattr(state, "phase", None),
+            "n_messages": len(api_messages),
+        },
+        session_id=session_id,
+        user_id=user_id,
+        tags=["survey-analysis", "chat"],
     )
 
     # Router decides the phase + which tools to expose (re-evaluated each round
