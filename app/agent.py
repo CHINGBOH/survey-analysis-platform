@@ -145,7 +145,7 @@ TOOL_DEFS = [
                         "enum": [
                             "descriptives", "crosstabs", "ttest", "anova", "correlation",
                             "reliability", "factor_analysis", "regression",
-                            "mediation", "moderation", "cluster", "power_bootstrap",
+                            "mediation", "moderation", "cluster", "power_bootstrap", "survey_specific",
                         ],
                         "description": "模块名称",
                     }
@@ -201,7 +201,7 @@ TOOL_DEFS = [
                         "enum": [
                             "descriptives", "crosstabs", "ttest", "anova", "correlation",
                             "reliability", "factor_analysis", "regression",
-                            "mediation", "moderation", "cluster", "power_bootstrap",
+                            "mediation", "moderation", "cluster", "power_bootstrap", "survey_specific",
                         ],
                         "description": "模块名称",
                     },

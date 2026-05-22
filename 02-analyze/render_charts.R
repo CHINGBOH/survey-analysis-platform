@@ -32,6 +32,8 @@ suffix <- if (sid == "survey1") "s1" else if (sid == "survey2") "s2" else sid
 
 rds_path <- file.path(ROOT, "output", "results", sprintf("%s_%s.rds", module, suffix))
 if (!file.exists(rds_path)) stop(sprintf("RDS 不存在: %s; 请先运行模块", rds_path))
+source(file.path(ROOT, "lib", "chart_stat.R"))
+source(file.path(ROOT, "lib", "chart_advanced.R"))
 
 out_dir <- file.path(ROOT, "output", "charts", sprintf("%s_%s", module, suffix))
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -276,6 +278,127 @@ if (module == "regression") {
       add_chart(paste0("roc_", gsub("[^A-Za-z0-9]+", "_", key)),
                 paste("ROC", key), "roc", p_roc, w = 6, h = 6)
     }
+  }
+}
+
+# ── 因子分析: 碎石 + 载荷热力 + 双标 ─────────────────────────
+if (module == "factor_analysis") {
+  for (nm in names(obj$pca %||% list())) {
+    pc <- obj$pca[[nm]]
+    if (!is.null(pc$eigenvalues)) {
+      add_chart(paste0("scree_", nm), paste("碎石图", nm), "scree",
+                chart_scree(pc$eigenvalues$特征值), w = 6, h = 4)
+    }
+    if (!is.null(pc$loadings)) {
+      add_chart(paste0("loadings_", nm), paste("载荷热力", nm), "heatmap",
+                chart_heatmap(pc$loadings, title = paste("因子载荷", nm)), w = 6, h = 5)
+    }
+  }
+}
+
+# ── 聚类: 簇大小柱 + 树状图 + 中心热力 ───────────────────────
+if (module == "cluster") {
+  for (nm in names(obj$kmeans %||% list())) {
+    km <- obj$kmeans[[nm]]
+    if (!is.null(km$cluster_sizes)) {
+      d <- km$cluster_sizes
+      p <- ggplot(d, aes(factor(cluster), n, fill = factor(cluster))) +
+        geom_col() + labs(title = paste("簇规模", nm), x = "簇", y = "样本数") +
+        theme_sap() + theme(legend.position = "none")
+      add_chart(paste0("kmeans_size_", nm), paste("KMeans 簇规模", nm), "bar", p, w = 5, h = 4)
+    }
+    if (!is.null(km$centers)) {
+      mat <- as.matrix(km$centers[, !names(km$centers) %in% c("cluster", "size")])
+      rownames(mat) <- paste0("C", km$centers$cluster)
+      add_chart(paste0("kmeans_centers_", nm), paste("KMeans 中心", nm), "heatmap",
+                chart_heatmap(mat, title = paste("簇中心 (标准化)", nm)), w = 6, h = 4)
+    }
+  }
+  for (nm in names(obj$hclust %||% list())) {
+    hc <- obj$hclust[[nm]]
+    if (!is.null(hc$hclust)) {
+      add_chart(paste0("dendro_", nm), paste("层次聚类树", nm), "dendro",
+                chart_dendrogram(hc$hclust, k = hc$k), w = 7, h = 4)
+    }
+  }
+}
+
+# ── 信度: 项目-总相关 柱 + 删除后 α 变化 ──────────────────────
+if (module == "reliability") {
+  for (nm in names(obj$scales %||% list())) {
+    sc <- obj$scales[[nm]]
+    if (is.null(sc$item_stats)) next
+    p <- ggplot(sc$item_stats, aes(reorder(变量, 校正项总), 校正项总)) +
+      geom_col(fill = "#1f77b4") + coord_flip() +
+      geom_hline(yintercept = 0.3, linetype = "dashed", color = "red") +
+      labs(title = paste("项-总相关", nm), x = NULL, y = "校正后项-总相关") + theme_sap()
+    add_chart(paste0("item_total_", nm), paste("项目分析", nm), "bar", p, w = 6, h = 4)
+    p2 <- ggplot(sc$item_stats, aes(reorder(变量, 删除后α), 删除后α)) +
+      geom_col(fill = "#ff7f0e") + coord_flip() +
+      geom_hline(yintercept = sc$alpha_raw, linetype = "dashed", color = "red") +
+      labs(title = paste("删除项后 α", nm), x = NULL,
+           y = sprintf("删除后 α (当前 α=%.3f)", sc$alpha_raw)) + theme_sap()
+    add_chart(paste0("alpha_drop_", nm), paste("删除项后 α", nm), "bar", p2, w = 6, h = 4)
+  }
+}
+
+# ── 问卷专用: Likert 堆叠 + Top2/NPS + 缺失 + 异常 + 情感 ─────
+if (module == "survey_specific") {
+  # Likert 分布堆叠
+  if (!is.null(obj$likert$distribution)) {
+    d <- obj$likert$distribution
+    p <- ggplot(d, aes(变量, 占比_pct, fill = factor(分值))) +
+      geom_col() + coord_flip() +
+      scale_fill_brewer(palette = "RdYlGn", name = "分值", direction = -1) +
+      labs(title = "Likert 量表分布", x = NULL, y = "占比 (%)") + theme_sap()
+    add_chart("likert_stack", "Likert 分布堆叠", "stacked_bar", p, w = 7, h = max(4, nrow(d)/6))
+  }
+  if (!is.null(obj$likert$summary)) {
+    s <- obj$likert$summary
+    p <- ggplot(s, aes(reorder(变量, Top2Box), Top2Box)) +
+      geom_col(fill = "#2ca02c") + coord_flip() +
+      geom_text(aes(label = sprintf("%.1f%%", Top2Box)), hjust = -0.2, size = 3) +
+      labs(title = "Top2Box 满意度", x = NULL, y = "Top2 (%)") + theme_sap() +
+      ylim(0, max(s$Top2Box) * 1.15)
+    add_chart("top2box", "Top2Box", "bar", p, w = 6, h = 4)
+    p2 <- ggplot(s, aes(reorder(变量, NPS), NPS, fill = NPS > 0)) +
+      geom_col() + coord_flip() +
+      scale_fill_manual(values = c(`TRUE` = "#2ca02c", `FALSE` = "#d62728"), guide = "none") +
+      geom_hline(yintercept = 0, color = "black") +
+      labs(title = "NPS 净推荐值", x = NULL, y = "NPS") + theme_sap()
+    add_chart("nps", "NPS", "bar", p2, w = 6, h = 4)
+  }
+  # 缺失率
+  if (!is.null(obj$missing)) {
+    m <- obj$missing[obj$missing$缺失数 > 0, ]
+    if (nrow(m) > 0) {
+      p <- ggplot(m, aes(reorder(变量, 缺失率_pct), 缺失率_pct)) +
+        geom_col(fill = "#d62728") + coord_flip() +
+        labs(title = "缺失率", x = NULL, y = "缺失率 (%)") + theme_sap()
+      add_chart("missing_rate", "缺失率", "bar", p, w = 6, h = max(3, nrow(m)/4))
+    }
+  }
+  # 异常 Z-score
+  if (!is.null(obj$outliers$zscore)) {
+    z <- obj$outliers$zscore
+    p <- ggplot(z, aes(reorder(变量, n异常), n异常)) +
+      geom_col(fill = "#ff7f0e") + coord_flip() +
+      labs(title = "异常值检测 (|Z|>3)", x = NULL, y = "异常样本数") + theme_sap()
+    add_chart("outliers_z", "异常值 Z-score", "bar", p, w = 6, h = 4)
+  }
+  # 情感
+  if (!is.null(obj$text$sentiment) && nrow(obj$text$sentiment) > 0) {
+    s <- obj$text$sentiment
+    long <- data.frame(
+      变量 = rep(s$变量, 3),
+      类型 = factor(rep(c("正面", "中性", "负面"), each = nrow(s)), levels = c("负面", "中性", "正面")),
+      占比 = c(s$pos_pct, s$neutral_pct, s$neg_pct)
+    )
+    p <- ggplot(long, aes(变量, 占比, fill = 类型)) +
+      geom_col() + coord_flip() +
+      scale_fill_manual(values = c("正面" = "#2ca02c", "中性" = "#888", "负面" = "#d62728")) +
+      labs(title = "开放题情感占比", x = NULL, y = "%") + theme_sap()
+    add_chart("sentiment", "开放题情感", "stacked_bar", p, w = 6, h = 4)
   }
 }
 

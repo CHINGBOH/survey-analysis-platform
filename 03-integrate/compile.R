@@ -8,7 +8,8 @@ module_header("结果整合")
 
 ALL_MODULES <- c("descriptives","crosstabs","ttest","anova","correlation",
                  "reliability","factor_analysis","regression",
-                 "mediation","moderation","cluster","power_bootstrap")
+                 "mediation","moderation","cluster","power_bootstrap",
+                 "survey_specific")
 
 plan_path <- "output/results/plan.json"
 if (file.exists(plan_path)) {

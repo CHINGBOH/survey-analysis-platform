@@ -47,7 +47,8 @@ MODULE_TITLES <- c(
   descriptives="描述统计", crosstabs="交叉表分析", ttest="t检验", anova="方差分析",
   correlation="相关分析", reliability="信度分析", factor_analysis="因子分析",
   regression="回归分析", mediation="中介效应", moderation="调节效应",
-  cluster="聚类分析", power_bootstrap="Bootstrap与效力"
+  cluster="聚类分析", power_bootstrap="Bootstrap与效力",
+  survey_specific="问卷专用分析"
 )
 
 # ── 各模块渲染器（含判读，缺失/样本不足友好提示）──────────────────
@@ -59,21 +60,42 @@ err_note <- function(x) {
 render <- list(
 
   reliability = function(x) {
-    if (err_note(x)) return()
-    cat(sprintf("- Cronbach's α = **%.4f**（%s），标准化 α = %.4f，Guttman λ₆ = %.4f，题项数 = %d\n\n",
-      x$alpha_raw, interp_alpha(x$alpha_raw), x$alpha_std, x$guttman_l6, x$n_items))
-    cat(sprintf("- 判读：内部一致性%s。%s\n\n", interp_alpha(x$alpha_raw),
-      if (x$alpha_raw >= 0.7) "量表可靠，适合做后续合成。" else "信度偏低，合成得分需谨慎解释。"))
+    scales <- x$scales %||% list()
+    if (length(scales) == 0) { cat("> ⚠️ 无信度结果\n\n"); return() }
+    for (nm in names(scales)) {
+      s <- scales[[nm]]
+      if (!is.null(s$error)) { cat("- *", nm, "*: > ⚠️ ", s$error, "\n\n", sep=""); next }
+      cat(sprintf("- *%s*: α(原始)=**%.4f** (%s), α(标准化)=%.4f, Guttman λ₆=%.4f, 分半=%.4f, n=%d, 项数=%d\n\n",
+                  nm, s$alpha_raw, s$interp, s$alpha_std %||% NA, s$guttman_L6 %||% NA,
+                  s$split_half_sb %||% NA, s$n, s$n_items))
+      if (!is.null(s$item_stats)) print(kable(s$item_stats, row.names = FALSE))
+      cat("\n")
+    }
   },
 
   factor_analysis = function(x) {
-    if (err_note(x)) return()
-    cat(sprintf("- KMO = **%.4f**（%s），Bartlett χ² = %.2f (df=%d) %s\n\n",
-      x$kmo, interp_kmo(x$kmo), x$bartlett_chi2, x$bartlett_df,
-      fmt_p(tryCatch(pchisq(x$bartlett_chi2, x$bartlett_df, lower.tail=FALSE), error=function(e) NA))))
-    cat("Varimax 旋转因子载荷：\n\n")
-    print(kable(round(x$loadings_varimax, 4)))
-    cat("\n\n")
+    kmo <- x$kmo %||% list(); pca <- x$pca %||% list(); efa <- x$efa %||% list()
+    for (nm in names(pca)) {
+      k <- kmo[[nm]]; p <- pca[[nm]]
+      if (!is.null(k) && is.null(k$error)) {
+        cat(sprintf("- *%s* KMO=**%.4f** (%s), Bartlett χ²=%.2f (df=%d, p=%s)\n\n",
+                    nm, k$kmo_overall, k$interp, k$bartlett_chi2, k$bartlett_df,
+                    format.pval(k$bartlett_p, eps = 1e-6)))
+      }
+      if (!is.null(p) && is.null(p$error)) {
+        cat(sprintf("  · PCA: %d 个成分, 旋转=%s\n\n", p$n_factors, p$rotation))
+        print(kable(p$eigenvalues, row.names = FALSE)); cat("\n")
+        print(kable(p$loadings)); cat("\n")
+      }
+    }
+    for (nm in names(efa)) {
+      e <- efa[[nm]]
+      if (!is.null(e$error)) next
+      cat(sprintf("- *%s* EFA: %d 因子, 方法=%s, 旋转=%s; TLI=%s, RMSEA=%s\n\n",
+                  nm, e$n_factors, e$method, e$rotation,
+                  e$fit$TLI %||% NA, e$fit$RMSEA %||% NA))
+      print(kable(e$loadings)); cat("\n")
+    }
   },
 
   correlation = function(x) {
@@ -205,13 +227,41 @@ render <- list(
   },
 
   cluster = function(x) {
-    if (err_note(x)) return()
-    sizes <- x$kmeans$sizes
-    n_used <- sum(sizes)
-    cat(sprintf("- K-Means 3 群，各群样本量 = %s（**聚类有效样本 n=%d**，已剔除缺失）\n",
-      paste(sizes, collapse=" / "), n_used))
-    cat(sprintf("- LDA 留一交叉验证正确率 = %.2f%%\n", x$lda_accuracy*100))
-    cat("  - ⚠️ 判读：该正确率衡量 LDA 能否复现 K-Means 自身划分，属**内部自洽性**，并非聚类结构真实性的独立证据。\n\n")
+    for (nm in names(x$kmeans %||% list())) {
+      km <- x$kmeans[[nm]]
+      if (!is.null(km$error)) { cat("- *", nm, "* KMeans: > ⚠️ ", km$error, "\n\n", sep=""); next }
+      cat(sprintf("- *%s* K-Means k=%d, n=%d, between/total=%.4f, silhouette=%s, LDA-CV=%s\n\n",
+                  nm, km$k, km$n, km$betweenss_totss %||% NA,
+                  km$silhouette %||% NA, km$lda_accuracy %||% NA))
+      print(kable(km$cluster_sizes, row.names = FALSE)); cat("\n")
+      print(kable(km$centers, row.names = FALSE)); cat("\n")
+    }
+    for (nm in names(x$discriminant %||% list())) {
+      ld <- x$discriminant[[nm]]
+      if (!is.null(ld$error)) next
+      cat(sprintf("- *%s* 判别 CV 正确率=%.4f\n\n", nm, ld$accuracy_cv %||% NA))
+      if (!is.null(ld$confusion_cv)) { print(kable(ld$confusion_cv)); cat("\n") }
+    }
+  },
+
+  survey_specific = function(x) {
+    if (!is.null(x$likert$summary)) {
+      cat("**Likert 量表摘要 (Top2Box / NPS)**\n\n")
+      print(kable(x$likert$summary, row.names = FALSE)); cat("\n")
+    }
+    if (!is.null(x$missing)) {
+      m <- x$missing[x$missing$缺失数 > 0, ]
+      if (nrow(m) > 0) { cat("**缺失分析**\n\n"); print(kable(m, row.names = FALSE)); cat("\n") }
+    }
+    if (!is.null(x$outliers$zscore)) {
+      cat("**异常值 (Z-score)**\n\n"); print(kable(x$outliers$zscore, row.names = FALSE)); cat("\n")
+    }
+    if (!is.null(x$outliers$iqr)) {
+      cat("**异常值 (IQR)**\n\n"); print(kable(x$outliers$iqr, row.names = FALSE)); cat("\n")
+    }
+    if (!is.null(x$text$sentiment) && nrow(x$text$sentiment) > 0) {
+      cat("**开放题情感**\n\n"); print(kable(x$text$sentiment, row.names = FALSE)); cat("\n")
+    }
   },
 
   descriptives = function(x) {
