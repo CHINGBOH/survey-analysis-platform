@@ -22,6 +22,14 @@ app:
 	@echo "启动 Streamlit 分析助手..."
 	PYTHONPATH=$(shell pwd) streamlit run app/main.py --server.port 8501
 
+# ====== FastAPI 后端 (Next.js 前端用) ======
+api:
+	@echo "启动 FastAPI on :8765..."
+	PYTHONPATH=$(shell pwd) uvicorn app.api:app --host 0.0.0.0 --port 8765 --reload
+
+api-prod:
+	PYTHONPATH=$(shell pwd) uvicorn app.api:app --host 0.0.0.0 --port 8765 --workers 2
+
 # ====== 数据探索 ======
 explore:
 	@echo "启动 Jupyter..."
