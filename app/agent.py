@@ -41,6 +41,7 @@ from app.tools import (
     run_analysis_module,
     run_clean,
     run_compile,
+    run_generic_ingest,
     run_report,
     run_selected_analysis,
     set_analysis_plan,
@@ -145,6 +146,31 @@ TOOL_DEFS = [
                     },
                 },
                 "required": ["target"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_generic_ingest",
+            "description": (
+                "通用入库：把任意 .xlsx/.csv 原样导入 sqlite 的 raw_data 表（不做字段编码）。"
+                "用于上传的问卷不是消费券 schema 的场景。注意：执行后 R 统计模块不可用，"
+                "只能跑 preview_data 或自定义 SQL。每次都会先删除再重建目标 .db。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "survey_id": {
+                        "type": "string",
+                        "description": "目标 survey id（字母数字下划线，如 survey1 / custom_2026q1）",
+                    },
+                    "source_file": {
+                        "type": "string",
+                        "description": "源文件路径，如 data/raw/<filename>.xlsx",
+                    },
+                },
+                "required": ["survey_id", "source_file"],
             },
         },
     },
@@ -407,6 +433,11 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
         "run_clean": lambda: run_clean(
             target=inputs.get("target", "all"),
             source_file=inputs.get("source_file"),
+            state=state,
+        ),
+        "run_generic_ingest": lambda: run_generic_ingest(
+            survey_id=inputs["survey_id"],
+            source_file=inputs["source_file"],
             state=state,
         ),
         "run_analysis_module": lambda: run_analysis_module(

@@ -3,6 +3,7 @@ app/tools.py — Tool implementations for the analysis agent.
 Each tool returns: {status, summary, next_actions, artifacts}
 """
 import json
+import re
 import sqlite3
 import subprocess
 from datetime import datetime
@@ -264,6 +265,46 @@ def run_clean(target: str = "all", source_file: str = None, state=None) -> Dict:
             "get_variable_catalog 查看变量目录",
             "check_pipeline_status 检查管道状态",
             "run_selected_analysis 运行分析模块",
+        ],
+    )
+
+
+# ──────────────────────────────────────────────────────────────────
+# Tool: run_generic_ingest
+# ──────────────────────────────────────────────────────────────────
+
+def run_generic_ingest(survey_id: str, source_file: str, state=None) -> Dict:
+    """Generic ingest for ANY survey schema: dumps Excel/CSV into sqlite raw_data
+    table without field encoding. Use when uploaded file is NOT the voucher
+    schema (i.e. run_clean would fail). R analysis modules will NOT work after
+    this; only preview_data / custom SQL queries are supported.
+    """
+    if not survey_id or not re.match(r"^[a-zA-Z0-9_]+$", survey_id):
+        return _err("survey_id 非法（只能用字母数字下划线，如 survey1 / custom_2026q1）")
+    if not source_file:
+        return _err("source_file 必填，例如 data/raw/<filename>.xlsx")
+    src = ROOT / source_file if not Path(source_file).is_absolute() else Path(source_file)
+    if not src.exists():
+        return _err(f"源文件不存在: {src}")
+    if state:
+        state.stage = "cleaning"
+    rc, stdout, stderr = _run(
+        ["python3", "01-clean/generic_ingest.py", survey_id,
+         "--source-file", str(src)]
+    )
+    if rc != 0:
+        return _err(f"通用入库失败 (exit {rc}): {stderr[-500:]}", detail=stderr)
+    if state:
+        state.clean_done = True
+        state.stage = "uploaded"
+    lines = [l for l in stdout.splitlines() if l.strip()]
+    summary = "\n".join(lines[-6:]) if lines else "完成"
+    return _ok(
+        f"通用入库完成（{survey_id}，无字段编码）: {summary}",
+        artifacts={"survey_id": survey_id, "output": stdout[-1500:]},
+        next_actions=[
+            "preview_data 预览数据",
+            "提醒用户: R 统计模块需要消费券 schema，当前 generic 模式只支持自定义 SQL / 描述性预览。",
         ],
     )
 

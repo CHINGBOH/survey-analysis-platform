@@ -140,18 +140,34 @@ make mediation        # 只跑中介分析
 make lint
 ```
 
-### 3. Agent 工具一览(18 个)
+### 3. Agent 工具一览(19 个)
 
 | 类别 | 工具 |
 |---|---|
-| 数据 | `load_dataset`, `inspect_schema`, `set_analysis_plan` |
-| 清洗 | `run_cleaning` |
-| 分析 | `run_analysis_module`, `get_results`, `interpret_results` |
+| 数据 | `load_dataset`, `inspect_schema`, `set_analysis_plan`, `preview_data` |
+| 清洗 | `run_clean`（消费券 schema 专用）, `run_generic_ingest`（任意 .xlsx → raw_data） |
+| 分析 | `run_analysis_module`, `run_selected_analysis`, `get_results`, `interpret_results` |
 | 图表 | `render_charts` |
 | 整合 | `run_compile`, `run_report` |
 | 报告 | `list_report_templates`, `generate_word`, `generate_pdf`, `export_charts_bundle` |
-| 状态 | `check_pipeline_status`, `read_log` |
+| 状态 | `check_pipeline_status`, `read_log`, `get_variable_catalog` |
 | 编排 | `dispatch_subagent` |
+
+#### 数据上传 / 入库说明
+
+UI 上传 .xlsx/.csv 文件后保存到 `data/raw/`，**Agent 必须用以下之一显式入库**（默认 cleaner 路径是硬编码的，不传 source_file 会读旧文件）：
+
+```text
+# 消费券问卷（字段与默认 schema 一致）
+run_clean(target="survey1", source_file="data/raw/<filename>.xlsx")
+  → 完整 13 个 R 统计模块可用
+
+# 其他主题问卷（字段不匹配消费券 schema）
+run_generic_ingest(survey_id="custom_xxx", source_file="data/raw/<filename>.xlsx")
+  → 仅 preview_data / 自定义 SQL 可用；R 模块不可用
+```
+
+两种路径都会**先删除目标 `data/db/<id>.db` 再重建**，不会重复追加。
 
 ## 技术栈
 
