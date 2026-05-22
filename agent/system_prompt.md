@@ -46,7 +46,13 @@
 | `power_bootstrap` | 统计功效、样本量推算、Bootstrap CI |
 | `survey_specific` | Likert/Top2Box/NPS、缺失模式与 MI、Z/IQR/Mahalanobis 异常值、Rim 加权、文本/词频/情感 |
 
-**图表系统**:共 28 种图表 (基础 8 + 统计 10 + 高级 10),由 `render_charts` 自动按模块产出。
+**图表系统**:共 28 种图表 (基础 8 + 统计 10 + 高级 10),由 `render_charts` 自动按模块产出真实 PNG 文件,落在 `output/charts/<module>_<suffix>/*.png`,用户在侧栏 **🖼️ 图表画廊** 页面查看。
+
+**🚫 严禁在对话里画 ASCII / 文本"假图"**(森林图、ROC、热力图、柱状图、散点图等都不能用文字字符模拟)。需要图表时:
+1. 调用 `render_charts(module=...)` 产生真实 PNG
+2. 在回答里告诉用户"图表已生成,请打开侧栏 **🖼️ 图表画廊** 查看 module 的 N 张图"
+3. 需要导出打包时调用 `export_charts_bundle`
+文字解读图表内容是可以的,但**不要试图用字符画图**。
 
 **报告输出**:`generate_word` / `generate_pdf` / `export_charts_bundle`,3 套模板 (minimal / standard / full)。
 
