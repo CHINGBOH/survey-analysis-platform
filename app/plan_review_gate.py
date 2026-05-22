@@ -68,53 +68,50 @@ def _static_checks(surveys, modules, focus) -> List[str]:
 
 
 _REVIEWER_SYSTEM = """你是一名严苛的分析计划评审员,以三个独立视角审查问卷分析计划。
-对每个视角输出一行,格式严格为 `<维度>: PASS` 或 `<维度>: FAIL <原因>`。
 
 维度定义:
 1. Feasibility(可行性): 计划中的 survey/module 在系统里是否真实存在; 模块依赖顺序是否合理(如 mediation 隐含需要 regression 基础); compare=True 时是否包含 ≥2 个 survey。
 2. Completeness(完整性): focus(研究问题)是否被 modules 充分覆盖? 例如 focus 提到"信度"但 modules 没有 reliability 即 FAIL; focus 提到"组间差异"但没有 ttest/anova 即 FAIL。
 3. Scope(范围对齐): 是否过度膨胀(无关模块大量纳入)或过度收缩(明显遗漏); 与用户原意是否匹配。
 
-仅输出 3 行,无任何额外解释或 Markdown。"""
+按 PlanReviewResult schema 输出。每维 passed=False 时,reason 必须给出可执行的修正建议。"""
 
 
-def _llm_review(plan: dict, client) -> ReviewVerdict:
-    """调用 DeepSeek 做三维评审。client 是已构造好的 OpenAI 兼容客户端。"""
+def _llm_review(plan: dict, client=None) -> ReviewVerdict:
+    """instructor + Pydantic 强制结构化评审。失败时降级为放行(并在 verdict 中标注)。"""
+    from app.structured import PlanReviewResult, structured_chat
+
     user_msg = (
         "请评审以下分析计划:\n"
         f"```json\n{json.dumps(plan, ensure_ascii=False, indent=2)}\n```\n"
         f"合法 surveys: {KNOWN_SURVEYS}\n"
         f"合法 modules: {KNOWN_MODULES}\n"
-        "按系统消息要求输出 3 行评审结论。"
     )
-    try:
-        resp = client.chat.completions.create(
-            model=os.environ.get("PLAN_REVIEW_MODEL", "deepseek-v4-pro"),
-            messages=[
-                {"role": "system", "content": _REVIEWER_SYSTEM},
-                {"role": "user", "content": user_msg},
-            ],
-            max_tokens=400,
-            temperature=0.0,
+
+    result = structured_chat(
+        PlanReviewResult,
+        system=_REVIEWER_SYSTEM,
+        user=user_msg,
+        temperature=0.0,
+    )
+
+    if result is None:
+        return ReviewVerdict(
+            True,
+            "PASS (review skipped: structured call failed)",
+            "PASS (review skipped)",
+            "PASS (review skipped)",
         )
-        raw = (resp.choices[0].message.content or "").strip()
-    except Exception as e:
-        # 评审本身挂掉,不能阻塞业务 — 直接放行并记录
-        return ReviewVerdict(True, "PASS (review skipped)", f"PASS (review skipped: {e})", "PASS (review skipped)")
 
-    lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
-    fea = comp = sco = "PASS (no verdict)"
-    for ln in lines:
-        low = ln.lower()
-        if "feasibility" in low or "可行" in ln:
-            fea = ln.split(":", 1)[-1].strip() if ":" in ln else ln
-        elif "completeness" in low or "完整" in ln:
-            comp = ln.split(":", 1)[-1].strip() if ":" in ln else ln
-        elif "scope" in low or "范围" in ln:
-            sco = ln.split(":", 1)[-1].strip() if ":" in ln else ln
+    def _fmt(v) -> str:
+        return ("PASS " if v.passed else "FAIL ") + v.reason
 
-    passed = all(v.upper().startswith("PASS") for v in (fea, comp, sco))
-    return ReviewVerdict(passed=passed, feasibility=fea, completeness=comp, scope=sco)
+    return ReviewVerdict(
+        passed=result.overall_passed,
+        feasibility=_fmt(result.feasibility),
+        completeness=_fmt(result.completeness),
+        scope=_fmt(result.scope),
+    )
 
 
 def review_plan(plan: dict, client=None) -> ReviewVerdict:
@@ -139,4 +136,4 @@ def review_plan(plan: dict, client=None) -> ReviewVerdict:
         from app.agent import _make_client  # 延迟导入,避免循环
         client = _make_client()
 
-    return _llm_review(plan, client)
+    return _llm_review(plan)

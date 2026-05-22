@@ -577,3 +577,70 @@ def dispatch_subagent(role: str, task: str, context: str = "", state=None) -> Di
         artifacts={"role": role, "task": task[:200], "response": text, "usage": usage_dict},
         next_actions=["参考 response,决定后续工具调用或回答用户"],
     )
+
+
+# ──────────────────────────────────────────────────────────────────
+# Tool: interpret_results — 用 instructor+Pydantic 约束的结构化解读
+# 防数据编造的核心: schema 强制每条 finding 引用具体数值
+# ──────────────────────────────────────────────────────────────────
+
+def _survey_suffix_local(s: str) -> str:
+    return "s1" if s == "survey1" else ("s2" if s == "survey2" else s)
+
+
+def interpret_results(module: str, survey_id: str = "survey1", state=None) -> Dict:
+    """读取 module 的 RDS,转 JSON 投给 LLM,在 ModuleInterpretation schema 约束下生成解读。
+
+    保证:每条 key_findings 必有 variable + statistic_name + value(来自真实 RDS)。
+    LLM 若编造,instructor 会重试; 重试仍失败返回 error。
+    """
+    if module not in VALID_MODULES:
+        return _err(f"未知模块: {module}")
+
+    rds_path = OUTPUT_RESULTS / f"{module}_{_survey_suffix_local(survey_id)}.rds"
+    if not rds_path.exists():
+        return _err(f"RDS 不存在: {rds_path.relative_to(ROOT)}; 请先运行该模块")
+
+    # 1) RDS → JSON
+    rc, stdout, stderr = _run(
+        ["Rscript", "02-analyze/rds_to_json.R", str(rds_path.relative_to(ROOT)), "30"],
+        timeout=30,
+    )
+    if rc != 0:
+        return _err(f"RDS 转 JSON 失败 (exit {rc})", detail=stderr[-400:])
+
+    raw_json = stdout.strip()
+    # 截断超长上下文(保留前 30000 字符,够 LLM 看)
+    if len(raw_json) > 30000:
+        raw_json = raw_json[:30000] + "\n...[truncated]"
+
+    # 2) 结构化解读
+    from app.structured import ModuleInterpretation, structured_chat
+    system = (
+        "你是问卷统计分析师。给定一个分析模块的 JSON 结果,产出 ModuleInterpretation。\n"
+        "硬约束:\n"
+        "1. 每条 key_findings 的 value 必须从输入 JSON 中直接取得,不允许编造或四舍五入到不存在的位数\n"
+        "2. variable 必须是 JSON 中真实出现的字段名/变量名\n"
+        "3. interpretation 必须引用该 value(中文表述)\n"
+        "4. 不显著的发现不要标 significant=True\n"
+        "5. 3-6 条最关键的发现即可,不要堆砌\n"
+    )
+    user = (
+        f"## 模块\n{module}\n\n"
+        f"## 调查\n{survey_id}\n\n"
+        f"## 原始统计结果(JSON)\n```json\n{raw_json}\n```\n"
+    )
+
+    result = structured_chat(ModuleInterpretation, system=system, user=user, temperature=0.1, max_retries=2)
+    if result is None:
+        return _err("结构化解读失败(instructor 多次重试仍未通过校验)")
+
+    payload = result.model_dump()
+    return _ok(
+        f"{module}@{survey_id} 已生成结构化解读,{len(payload['key_findings'])} 条关键发现",
+        artifacts={"interpretation": payload, "rds": str(rds_path.relative_to(ROOT))},
+        next_actions=[
+            "可将 interpretation 嵌入报告章节",
+            "调用 dispatch_subagent 让 data-scientist 复核解读",
+        ],
+    )

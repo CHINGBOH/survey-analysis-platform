@@ -30,6 +30,7 @@ from app.tools import (
     dispatch_subagent,
     get_results,
     get_variable_catalog,
+    interpret_results,
     preview_data,
     read_log,
     run_analysis_module,
@@ -255,6 +256,25 @@ TOOL_DEFS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "interpret_results",
+            "description": (
+                "读取已运行模块的 RDS,通过 instructor+Pydantic schema 约束生成结构化解读。"
+                "每条 key_findings 强制带变量名 + 统计量名 + 数值,杜绝 LLM 编造数据。"
+                "在分析模块完成后、生成报告前调用,把数字结果转成可信中文解读。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "module": {"type": "string", "description": "模块名,如 descriptives / ttest / regression"},
+                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"], "description": "默认 survey1"},
+                },
+                "required": ["module"],
+            },
+        },
+    },
 ]
 
 
@@ -315,6 +335,11 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
             role=inputs["role"],
             task=inputs["task"],
             context=inputs.get("context", ""),
+            state=state,
+        ),
+        "interpret_results": lambda: interpret_results(
+            module=inputs["module"],
+            survey_id=inputs.get("survey_id", "survey1"),
             state=state,
         ),
     }

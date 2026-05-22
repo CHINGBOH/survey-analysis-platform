@@ -4,3 +4,4 @@ pydantic>=2.0.0
 pandas>=2.0.0
 openpyxl>=3.0.0
 langfuse>=2.50.0  # 可观测性,通过 LANGFUSE_* 环境变量启用
+instructor>=1.10.0  # Pydantic-约束 LLM 输出,杜绝结构幻觉
