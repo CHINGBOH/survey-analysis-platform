@@ -8,6 +8,7 @@ import streamlit as st
 from app.state import (
     ALL_MODULES,
     MODULE_LABELS_CN,
+    MODULE_GROUPS,
     PipelineStage,
 )
 
@@ -105,16 +106,20 @@ def render_sidebar(state, api_messages: list):
     disk = check_pipeline_status(state).get("artifacts", {}).get("modules", {})
     planned = set(plan.get("modules", ALL_MODULES)) if plan else set(ALL_MODULES)
 
-    st.sidebar.caption("分析模块：")
-    cols = st.sidebar.columns(2)
+    st.sidebar.caption(f"分析模块 (共 {len(ALL_MODULES)} 个,SPSS 分类):")
     disk_icon = {"done": "✅", "partial": "🟡", "missing": "⬜"}
-    for i, mod in enumerate(ALL_MODULES):
-        label = MODULE_LABELS_CN.get(mod, mod)
-        if mod not in planned:
-            cols[i % 2].markdown(f"➖ :gray[{label}]", help="不在当前计划")
-        else:
-            icon = disk_icon.get(disk.get(mod, "missing"), "⬜")
-            cols[i % 2].markdown(f"{icon} {label}", help=mod)
+    for group_name, mods in MODULE_GROUPS:
+        n_done = sum(1 for m in mods if disk.get(m) == "done")
+        with st.sidebar.expander(f"{group_name}  ({n_done}/{len(mods)})",
+                                 expanded=(n_done > 0 and n_done < len(mods))):
+            for mod in mods:
+                label = MODULE_LABELS_CN.get(mod, mod)
+                if mod not in planned:
+                    st.markdown(f"➖ :gray[{label}]", help="不在当前计划")
+                else:
+                    icon = disk_icon.get(disk.get(mod, "missing"), "⬜")
+                    st.markdown(f"{icon} {label}  <small>`{mod}`</small>",
+                                unsafe_allow_html=True, help=mod)
 
     # Report link
     if state.report_path and Path(state.report_path).exists():
@@ -122,6 +127,22 @@ def render_sidebar(state, api_messages: list):
         st.sidebar.success("报告已就绪")
         rel = Path(state.report_path).relative_to(ROOT)
         st.sidebar.caption(f"路径: {rel}")
+
+    # ── 能力一览 (永久显示) ──
+    st.sidebar.divider()
+    with st.sidebar.expander("📚 平台能力总览", expanded=False):
+        st.markdown("**📊 统计分析**")
+        st.caption(f"- 13 模块 / 40+ SPSS 子过程")
+        st.caption(f"- 描述/交叉/t/ANOVA/相关/回归")
+        st.caption(f"- 中介/调节/信度/因子/聚类")
+        st.caption(f"- Bootstrap/Likert/NPS/文本")
+        st.markdown("**🖼️ 图表系统**")
+        st.caption(f"- 基础 8 (条/饼/线/散点/箱/直方/QQ/密度)")
+        st.caption(f"- 统计 10 (碎石/双标/森林/ROC/火山等)")
+        st.caption(f"- 高级 10 (热力/雷达/桑基/词云等)")
+        st.markdown("**📄 报告输出**")
+        st.caption(f"- HTML / Word / PDF / 图片包 ZIP")
+        st.caption(f"- 3 套模板: minimal/standard/full")
 
 
 def _inject_data_notice(api_messages: list, filename: str, state):

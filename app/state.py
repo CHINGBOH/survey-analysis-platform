@@ -24,6 +24,7 @@ ALL_MODULES = [
     "descriptives", "crosstabs", "ttest", "anova", "correlation",
     "reliability", "factor_analysis", "regression",
     "mediation", "moderation", "cluster", "power_bootstrap",
+    "survey_specific",
 ]
 
 MODULE_LABELS_CN = {
@@ -39,7 +40,19 @@ MODULE_LABELS_CN = {
     "moderation": "调节效应",
     "cluster": "聚类分析",
     "power_bootstrap": "Bootstrap效力",
+    "survey_specific": "问卷专用",
 }
+
+# SPSS 分类 (与 app/ui/pages.py SPSS_CATEGORIES 保持一致)
+MODULE_GROUPS = [
+    ("📈 描述", ["descriptives", "crosstabs"]),
+    ("📊 均值比较", ["ttest", "anova"]),
+    ("🔗 相关回归", ["correlation", "regression", "mediation", "moderation"]),
+    ("🧮 信度降维", ["reliability", "factor_analysis"]),
+    ("🗂️ 聚类", ["cluster"]),
+    ("⚙️ 高级", ["power_bootstrap"]),
+    ("📝 问卷", ["survey_specific"]),
+]
 
 STATUS_ICONS = {
     ModuleStatus.PENDING: "⬜",
