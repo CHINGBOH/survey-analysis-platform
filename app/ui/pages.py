@@ -18,6 +18,75 @@ MODULE_TITLES = {
     "power_bootstrap": "Bootstrap 与效力", "survey_specific": "问卷专用分析",
 }
 
+# SPSS-style 分类菜单 → (模块名, 子过程描述, 适用变量类型)
+SPSS_CATEGORIES = [
+    ("📈 描述统计", [
+        ("descriptives", "频率分布 · 描述统计 · 探索 · 正态性 (Shapiro/K-S)", "数值/分类"),
+        ("crosstabs",    "交叉表 · χ² · Cramer's V · Phi · Gamma · Fisher", "分类×分类"),
+    ]),
+    ("📊 比较均值与方差", [
+        ("ttest", "单样本 t · 独立样本 t · 配对 t · Mann-Whitney · Wilcoxon", "数值×分组"),
+        ("anova", "单因素 ANOVA · MANOVA · η²/ω² · Tukey HSD · Games-Howell · Kruskal-Wallis", "数值×多组"),
+    ]),
+    ("🔗 相关与回归", [
+        ("correlation", "Pearson · Spearman · Kendall · 偏相关 · 距离矩阵", "数值对"),
+        ("regression",  "线性 · 逐步 · 层次 · 二元 Logistic · 多分类 Logistic · Poisson", "数值/二分类 ~ 多变量"),
+        ("mediation",   "中介效应 · Sobel · Bootstrap · lavaan 路径模型", "X→M→Y"),
+        ("moderation",  "调节效应 · 交互项 · Johnson-Neyman · 简单斜率", "X×W→Y"),
+    ]),
+    ("🧮 信度与降维", [
+        ("reliability",     "Cronbach α · 分半信度 · McDonald ω · 项目-总分 · α-if-deleted", "量表"),
+        ("factor_analysis", "PCA · EFA · KMO · Bartlett · 碎石图 · 因子旋转 (Varimax/Promax)", "量表/多项"),
+    ]),
+    ("🗂️ 分类与聚类", [
+        ("cluster", "K-Means · 层次聚类 (Ward/Complete/Average) · 判别分析 (LDA) · 树状图", "多变量"),
+    ]),
+    ("⚙️ 高级与抽样", [
+        ("power_bootstrap", "统计功效 · 样本量推算 · Bootstrap CI · 重抽样验证", "任意"),
+    ]),
+    ("📝 问卷专用", [
+        ("survey_specific", "Likert · Top2Box · NPS · 缺失模式 · 多重插补 · 异常值 (Z/IQR/Mahalanobis) · 加权 · 文本/词频/情感", "问卷量表"),
+    ]),
+]
+
+# 图表索引 → (模块, 图名, 中文描述)
+CHART_CATALOG = [
+    ("基础图表 (8)", [
+        ("chart_bar",       "条形图",     "频数/均值对比"),
+        ("chart_pie",       "饼图",       "构成比"),
+        ("chart_line",      "折线图",     "趋势对比"),
+        ("chart_scatter",   "散点图",     "相关关系 (含拟合)"),
+        ("chart_box",       "箱线图",     "分布与离群"),
+        ("chart_hist",      "直方图",     "数值分布"),
+        ("chart_qq",        "Q-Q 图",     "正态性诊断"),
+        ("chart_density",   "密度图",     "概率密度估计"),
+    ]),
+    ("统计专用 (10)", [
+        ("chart_scree",        "碎石图",       "因子/主成分选取"),
+        ("chart_biplot",       "双标图",       "PCA 载荷+得分"),
+        ("chart_forest",       "森林图",       "效应量 95% CI"),
+        ("chart_roc",          "ROC 曲线",     "二分类诊断 AUC"),
+        ("chart_volcano",      "火山图",       "效应×显著性"),
+        ("chart_mosaic",       "马赛克图",     "交叉表可视化"),
+        ("chart_km",           "Kaplan-Meier", "生存曲线"),
+        ("chart_diagnostics4", "回归诊断 4 图", "残差/QQ/杠杆/标准化"),
+        ("chart_dendrogram",   "树状图",       "层次聚类结构"),
+        ("chart_effect_size",  "效应量条形",   "Cohen's d 等"),
+    ]),
+    ("高级可视化 (10)", [
+        ("chart_heatmap",   "热力图",     "矩阵/相关阵"),
+        ("chart_radar",     "雷达图",     "多维对比"),
+        ("chart_sankey",    "桑基图",     "流向追踪"),
+        ("chart_sunburst",  "旭日图",     "层级构成"),
+        ("chart_funnel",    "漏斗图",     "转化率"),
+        ("chart_waterfall", "瀑布图",     "增量分解"),
+        ("chart_wordcloud", "词云",       "文本关键词"),
+        ("chart_network",   "网络图",     "关系/共现"),
+        ("chart_parallel",  "平行坐标",   "多维数据线"),
+        ("chart_china_map", "中国地图",   "省级填色"),
+    ]),
+]
+
 
 # ─── 数据页 ────────────────────────────────────────────
 def render_data_page(state):
@@ -67,31 +136,80 @@ def render_data_page(state):
     st.download_button("⬇️ 下载 CSV (当前页)", csv, f"{tbl}_page{page}.csv", "text/csv")
 
 
-# ─── 分析模块页 ──────────────────────────────────────────
+# ─── 分析模块页 (SPSS 风格分类菜单) ──────────────────────
 def render_analyses_page(state, api_messages):
-    st.subheader("📊 分析模块")
-    st.caption("点击模块卡片可一键触发分析;或在对话框中描述需求由 Agent 自动编排。")
+    st.subheader("📊 统计分析 — SPSS 等价模块清单")
+    st.caption(
+        "13 个分析模块按 SPSS 菜单结构分类,每个模块封装多个子过程 "
+        "(共 **40+ 种统计方法**)。点击 ▶️ 一键运行,或在 💬 聊天 tab 用自然语言描述需求。"
+    )
 
-    # 模块状态(结果文件是否存在)
-    cols = st.columns(4)
-    for i, (mod, title) in enumerate(MODULE_TITLES.items()):
-        c = cols[i % 4]
-        rds = OUTPUT / "results" / f"{mod}_s1.rds"
-        status = "✅" if rds.exists() else "⚪"
-        with c.container(border=True):
-            st.markdown(f"**{status} {title}**")
-            st.caption(f"`{mod}`")
-            if rds.exists():
-                st.caption(f"输出: {rds.stat().st_size // 1024} KB")
-            if st.button("▶️ 运行", key=f"run_{mod}", use_container_width=True):
-                api_messages.append({"role": "user",
-                                     "content": f"请运行 run_analysis_module('{mod}','survey1') 并 render_charts。"})
-                st.rerun()
+    # 顶部统计条
+    ready = sum(1 for m in MODULE_TITLES if (OUTPUT / "results" / f"{m}_s1.rds").exists())
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("总模块数", len(MODULE_TITLES))
+    c2.metric("已完成", ready)
+    c3.metric("子过程", "40+")
+    c4.metric("图表类型", "28")
+    st.divider()
+
+    # SPSS 分类菜单
+    for cat_name, items in SPSS_CATEGORIES:
+        st.markdown(f"### {cat_name}")
+        cols = st.columns(min(2, len(items)) if len(items) > 1 else 1)
+        for i, (mod, desc, var_type) in enumerate(items):
+            title = MODULE_TITLES.get(mod, mod)
+            rds = OUTPUT / "results" / f"{mod}_s1.rds"
+            ready_flag = "✅ 已完成" if rds.exists() else "⚪ 待运行"
+            with cols[i % len(cols)].container(border=True):
+                st.markdown(f"**{title}** &nbsp; <small>`{mod}`</small>", unsafe_allow_html=True)
+                st.caption(f"📋 子过程: {desc}")
+                st.caption(f"📐 变量类型: {var_type} · {ready_flag}")
+                if rds.exists():
+                    st.caption(f"📦 输出: {rds.stat().st_size // 1024} KB")
+                b1, b2 = st.columns(2)
+                if b1.button("▶️ 运行", key=f"run_{mod}", use_container_width=True):
+                    api_messages.append({
+                        "role": "user",
+                        "content": f"请运行 run_analysis_module('{mod}','survey1') 并 render_charts('{mod}')。"
+                    })
+                    st.rerun()
+                if b2.button("📖 查看结果", key=f"view_{mod}", use_container_width=True,
+                             disabled=not rds.exists()):
+                    api_messages.append({
+                        "role": "user",
+                        "content": f"请 get_results('{mod}','survey1') 并 interpret_results 给出解读。"
+                    })
+                    st.rerun()
+        st.write("")
 
 
 # ─── 图表画廊页 ─────────────────────────────────────────
 def render_charts_page(state):
-    st.subheader("🖼️ 图表画廊")
+    st.subheader("🖼️ 图表系统")
+    sub_gallery, sub_catalog = st.tabs(["📁 已生成图表", "📚 图表类型目录 (28 种)"])
+
+    with sub_gallery:
+        _render_chart_gallery()
+
+    with sub_catalog:
+        _render_chart_catalog()
+
+
+def _render_chart_catalog():
+    """展示所有可用图表类型 (28 种,按基础/统计/高级分类)。"""
+    st.caption("本平台共支持 **28 种图表**,覆盖 SPSS / 学术论文 / 商业可视化常见需求。")
+    for cat_name, items in CHART_CATALOG:
+        st.markdown(f"### {cat_name}")
+        cols = st.columns(2)
+        for i, (func, name, desc) in enumerate(items):
+            with cols[i % 2].container(border=True):
+                st.markdown(f"**{name}** &nbsp; <small>`{func}`</small>", unsafe_allow_html=True)
+                st.caption(f"💡 {desc}")
+        st.write("")
+
+
+def _render_chart_gallery():
     charts_root = OUTPUT / "charts"
     if not charts_root.exists():
         st.info("尚无图表。请先运行分析 + render_charts。"); return
