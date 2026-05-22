@@ -151,7 +151,11 @@ def _inject_data_notice(api_messages: list, filename: str, state):
     content = (
         f"[系统通知] 用户已显式选择数据文件: {filename}（路径 data/raw/{filename}）。"
         f"请 preview_data 预览该文件，然后询问用户的分析意图（哪个调查/哪些模块/核心问题），"
-        f"意图清楚后用 set_analysis_plan 锁定计划。"
+        f"意图清楚后用 set_analysis_plan 锁定计划。\n"
+        f"⚠️ 调用 run_clean 时必须传 source_file='data/raw/{filename}'，"
+        f"否则会读默认硬编码文件而不是用户刚选的这个。"
+        f"target 取 survey1（消费券完整版）或 survey2（消费券精简版）—— 当前 cleaner 只支持"
+        f"消费券问卷 schema，若用户上传的是其他主题问卷，请明确告知尚不支持并停止。"
     )
     # Only inject once per file
     already = any(

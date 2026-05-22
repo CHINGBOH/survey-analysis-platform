@@ -232,9 +232,11 @@ def get_variable_catalog(survey_id: str = "survey1") -> Dict:
 # Tool: run_clean
 # ──────────────────────────────────────────────────────────────────
 
-def run_clean(target: str = "all", state=None) -> Dict:
+def run_clean(target: str = "all", source_file: str = None, state=None) -> Dict:
     """Run clean_to_sqlite.py to import Excel → SQLite.
     If target is the default and a plan exists, clean only the plan's surveys.
+    If source_file is given, it overrides the default Excel path for that target.
+    The pipeline always deletes & recreates the target .db (no append).
     """
     if target == "all":
         plan_surveys = _resolve_surveys()
@@ -242,7 +244,12 @@ def run_clean(target: str = "all", state=None) -> Dict:
             target = plan_surveys[0]
     if state:
         state.stage = "cleaning"
-    rc, stdout, stderr = _run(["python3", "01-clean/clean_to_sqlite.py", target])
+    cmd = ["python3", "01-clean/clean_to_sqlite.py", target]
+    if source_file:
+        if target == "all":
+            return _err("source_file 必须配合 survey1 或 survey2，不能与 all 同用")
+        cmd += ["--source-file", source_file]
+    rc, stdout, stderr = _run(cmd)
     if rc != 0:
         return _err(f"清洗失败 (exit {rc}): {stderr[-500:]}", detail=stderr)
     if state:

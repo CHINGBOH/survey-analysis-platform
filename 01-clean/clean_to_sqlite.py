@@ -2,9 +2,15 @@
 """
 01-clean/clean_to_sqlite.py
 Excel → 编码 → 校验 → SQLite 入库
-用法: python3 01-clean/clean_to_sqlite.py [survey1|survey2|all]
+用法:
+  python3 01-clean/clean_to_sqlite.py [survey1|survey2|all]
+  python3 01-clean/clean_to_sqlite.py survey1 --source-file data/raw/<filename>.xlsx
+
+注意: 当前编码逻辑针对"数字消费券调研"问卷 schema（gender_bin / ai_accept /
+meta_accept / dynamic_num / env_willing 等字段）。上传的 .xlsx 必须列结构一致，
+否则会编码失败或入库错误数据。通用问卷支持见 generic_ingest（TODO）。
 """
-import sys, sqlite3, json, re
+import sys, sqlite3, json, re, argparse
 import pandas as pd
 from pathlib import Path
 
@@ -52,9 +58,32 @@ def split_multiselect(series, sep="┋"):
 
 # ============== 调查一编码 ==============
 
+DEFAULT_SOURCES = {
+    "survey1": "问卷数据_完整版_209条.xlsx",
+    "survey2": "问卷数据_精简版_206条.xlsx",
+}
+
+# Overridable per-run via --source-file (resolved in __main__ and stashed here)
+SOURCE_OVERRIDES: dict = {}
+
+
+def _resolve_source(survey_id: str) -> Path:
+    """Return absolute path to the Excel file for a given survey, honoring overrides."""
+    override = SOURCE_OVERRIDES.get(survey_id)
+    if override:
+        p = Path(override)
+        if not p.is_absolute():
+            p = ROOT / p
+        if not p.exists():
+            raise FileNotFoundError(f"--source-file 指定的文件不存在: {p}")
+        return p
+    return DATA_RAW / DEFAULT_SOURCES[survey_id]
+
+
 def clean_survey1():
-    df = pd.read_excel(DATA_RAW / "问卷数据_完整版_209条.xlsx")
-    print(f"调查一: {df.shape[0]} × {df.shape[1]}")
+    src = _resolve_source("survey1")
+    df = pd.read_excel(src)
+    print(f"调查一: {df.shape[0]} × {df.shape[1]}  ← {src.name}")
 
     rows = []
     responses = []
@@ -138,7 +167,9 @@ def clean_survey1():
 # ============== 调查二编码 ==============
 
 def clean_survey2():
-    df = pd.read_excel(DATA_RAW / "问卷数据_精简版_206条.xlsx")
+    src = _resolve_source("survey2")
+    df = pd.read_excel(src)
+    print(f"调查二: {df.shape[0]} × {df.shape[1]}  ← {src.name}")
     print(f"调查二: {df.shape[0]} × {df.shape[1]}")
 
     rows = []
@@ -275,7 +306,19 @@ def write_to_sqlite(db_path, rows, responses, survey_id):
 # ============== 入口 ==============
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "all"
+    parser = argparse.ArgumentParser(description="Excel → SQLite 数据清洗管道")
+    parser.add_argument("target", nargs="?", default="all",
+                        choices=["survey1", "survey2", "all"],
+                        help="清洗目标，默认 all")
+    parser.add_argument("--source-file", default=None,
+                        help="覆盖默认 Excel 路径（仅对单一 target 生效，target 不能为 all）")
+    args = parser.parse_args()
+    target = args.target
+
+    if args.source_file:
+        if target == "all":
+            parser.error("--source-file 必须配合 survey1 或 survey2，不能与 all 同用")
+        SOURCE_OVERRIDES[target] = args.source_file
 
     for survey_id, cleaner in [("survey1", clean_survey1), ("survey2", clean_survey2)]:
         if target not in (survey_id, "all"): continue

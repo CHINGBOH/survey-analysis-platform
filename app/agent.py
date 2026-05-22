@@ -122,15 +122,27 @@ TOOL_DEFS = [
         "type": "function",
         "function": {
             "name": "run_clean",
-            "description": "运行数据清洗管道：Excel → 编码 → SQLite 入库",
+            "description": (
+                "运行数据清洗管道：Excel → 编码 → SQLite 入库。"
+                "每次都会先删除目标 .db 再重建（不会重复追加）。"
+                "上传新文件时务必把 data/raw/<filename> 通过 source_file 传入，"
+                "否则会读默认硬编码路径而不是用户刚上传的文件。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "target": {
                         "type": "string",
                         "enum": ["survey1", "survey2", "all"],
-                        "description": "清洗目标，默认 all",
-                    }
+                        "description": "清洗目标，默认 all。配合 source_file 时不能为 all。",
+                    },
+                    "source_file": {
+                        "type": "string",
+                        "description": (
+                            "可选。覆盖默认 Excel 路径（相对仓库根目录，如 data/raw/xxx.xlsx）。"
+                            "用户上传新文件后必须显式传入此参数，否则清洗的是旧的硬编码文件。"
+                        ),
+                    },
                 },
                 "required": ["target"],
             },
@@ -393,7 +405,9 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
             survey_id=inputs.get("survey_id", "survey1")
         ),
         "run_clean": lambda: run_clean(
-            target=inputs.get("target", "all"), state=state
+            target=inputs.get("target", "all"),
+            source_file=inputs.get("source_file"),
+            state=state,
         ),
         "run_analysis_module": lambda: run_analysis_module(
             module=inputs["module"], survey_id=inputs.get("survey_id"), state=state
