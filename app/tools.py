@@ -551,12 +551,19 @@ def dispatch_subagent(role: str, task: str, context: str = "", state=None) -> Di
         user_msg += f"\n\n## 上下文\n{context}"
 
     try:
-        # 延迟导入避免循环
-        from app.agent import _make_client
+        # 子 agent 用裸 OpenAI client,跳过 Langfuse 包装
+        # (langfuse.openai 在 DeepSeek 上会触发 "Authentication Fails (governor)";
+        #  且本次调用已在父 tool span 内,无需再开独立 trace)
         import os as _os
-        client = _make_client()
+        import httpx as _httpx
+        from openai import OpenAI as _OpenAI
+        api_key = _os.environ.get("DEEPSEEK_API_KEY", "")
+        if not api_key:
+            return _err("DEEPSEEK_API_KEY 未设置")
+        _http = _httpx.Client(transport=_httpx.HTTPTransport())
+        client = _OpenAI(api_key=api_key, base_url="https://api.deepseek.com", http_client=_http)
         resp = client.chat.completions.create(
-            model=_os.environ.get("SUBAGENT_MODEL", "deepseek-v4-pro"),
+            model=_os.environ.get("SUBAGENT_MODEL", "deepseek-chat"),
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_msg},
