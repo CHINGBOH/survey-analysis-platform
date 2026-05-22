@@ -39,3 +39,6 @@ output/reports/images_*/
 output/results/*.json
 .env
 .env.local
+data/raw/*.xlsx
+data/raw/*.csv
+data/raw/*.xls
