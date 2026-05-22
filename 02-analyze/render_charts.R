@@ -119,28 +119,36 @@ if (module == "crosstabs") {
 }
 
 if (module == "ttest") {
-  # t 检验 → 箱线图比较 + 均值差异条
-  if (!is.null(obj$results) && is.data.frame(obj$results)) {
-    for (i in seq_len(min(6, nrow(obj$results)))) {
-      row <- obj$results[i, ]
-      vname <- row$变量 %||% row$variable %||% row[[1]]
-      gname <- row$分组 %||% row$group %||% NA
-      if (is.na(vname) || is.na(gname)) next
-      # 读取原始数据
-      db_path <- file.path(ROOT, "data", "db", paste0(sid, ".db"))
-      if (!file.exists(db_path)) next
+  # 新结构: obj$independent 行含 因变量/分组变量/组1/组2
+  ind <- obj$independent
+  if (!is.null(ind) && is.data.frame(ind)) {
+    db_path <- file.path(ROOT, "data", "db", paste0(sid, ".db"))
+    respondents <- NULL
+    if (file.exists(db_path) && requireNamespace("DBI", quietly = TRUE) &&
+        requireNamespace("RSQLite", quietly = TRUE)) {
       con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
       respondents <- DBI::dbReadTable(con, "respondents")
       DBI::dbDisconnect(con)
-      if (!(vname %in% names(respondents)) || !(gname %in% names(respondents))) next
-      df <- data.frame(x = as.character(respondents[[gname]]),
-                       y = as.numeric(respondents[[vname]]))
-      df <- df[!is.na(df$x) & !is.na(df$y), ]
-      if (nrow(df) < 5) next
-      add_chart(paste0("box_", vname, "_by_", gname),
-                sprintf("%s ~ %s", vname, gname), "box",
-                chart_box(df, "x", "y", title = sprintf("%s 按 %s 分组", vname, gname),
-                          xlab = gname, ylab = vname))
+    }
+    if (!is.null(respondents)) {
+      for (i in seq_len(min(8, nrow(ind)))) {
+        row <- ind[i, ]
+        vname <- as.character(row$因变量 %||% row$variable %||% NA)
+        gname <- as.character(row$分组变量 %||% row$group %||% NA)
+        if (is.na(vname) || is.na(gname)) next
+        if (!(vname %in% names(respondents)) || !(gname %in% names(respondents))) next
+        df <- data.frame(x = as.character(respondents[[gname]]),
+                         y = as.numeric(respondents[[vname]]))
+        df <- df[!is.na(df$x) & !is.na(df$y), ]
+        if (nrow(df) < 5) next
+        p_val <- suppressWarnings(as.numeric(row$p_Welch %||% row$`p值` %||% NA))
+        p_lbl <- if (!is.na(p_val)) sprintf(" (p=%.3f)", p_val) else ""
+        add_chart(paste0("box_", vname, "_by_", gname),
+                  sprintf("%s ~ %s%s", vname, gname, p_lbl), "box",
+                  chart_box(df, "x", "y",
+                            title = sprintf("%s 按 %s 分组%s", vname, gname, p_lbl),
+                            xlab = gname, ylab = vname))
+      }
     }
   }
 }
@@ -160,6 +168,57 @@ if (module == "correlation") {
       theme_sap() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
     add_chart("corr_pearson", "Pearson 相关矩阵", "heatmap", p, w = 7.5, h = 6.5)
+  }
+}
+
+if (module == "anova") {
+  # 新结构: obj$summaries (rbind) + obj$group_means (list)
+  sm <- obj$summaries
+  if (!is.null(sm) && is.data.frame(sm)) {
+    db_path <- file.path(ROOT, "data", "db", paste0(sid, ".db"))
+    respondents <- NULL
+    if (file.exists(db_path) && requireNamespace("DBI", quietly = TRUE) &&
+        requireNamespace("RSQLite", quietly = TRUE)) {
+      con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
+      respondents <- DBI::dbReadTable(con, "respondents")
+      DBI::dbDisconnect(con)
+    }
+    for (i in seq_len(min(8, nrow(sm)))) {
+      row <- sm[i, ]
+      vname <- as.character(row$因变量); gname <- as.character(row$分组变量)
+      eta2 <- suppressWarnings(as.numeric(row$eta_squared))
+      if (!is.na(eta2) && eta2 > 0.95) next  # 跳过完美共线案例
+      p_val <- suppressWarnings(as.numeric(row$`p值`))
+      # 1. 箱线图(从原始数据)
+      if (!is.null(respondents) && vname %in% names(respondents) && gname %in% names(respondents)) {
+        df <- data.frame(x = as.character(respondents[[gname]]),
+                         y = as.numeric(respondents[[vname]]))
+        df <- df[!is.na(df$x) & !is.na(df$y), ]
+        if (nrow(df) >= 5) {
+          lbl <- if (!is.na(p_val)) sprintf(" (F=%.2f, p=%.3f, η²=%.3f)",
+                                            as.numeric(row$F), p_val, eta2) else ""
+          add_chart(paste0("box_", vname, "_by_", gname),
+                    sprintf("%s 按 %s 分组%s", vname, gname, lbl), "box",
+                    chart_box(df, "x", "y",
+                              title = sprintf("%s 按 %s 分组%s", vname, gname, lbl),
+                              xlab = gname, ylab = vname))
+        }
+      }
+      # 2. 组均值条形图
+      key <- sprintf("%s__by__%s", vname, gname)
+      gm <- obj$group_means[[key]]
+      if (!is.null(gm) && is.data.frame(gm) && "组" %in% names(gm) && "均值" %in% names(gm)) {
+        p_bar <- ggplot(gm, aes(x = `组`, y = `均值`, fill = `组`)) +
+          geom_col(width = 0.7, show.legend = FALSE) +
+          geom_text(aes(label = sprintf("%.2f", `均值`)), vjust = -0.4, size = 3) +
+          scale_fill_manual(values = SAP_PALETTE) +
+          labs(title = sprintf("%s 各组均值 (%s)", vname, gname),
+               x = gname, y = vname) +
+          theme_sap()
+        add_chart(paste0("mean_", vname, "_by_", gname),
+                  sprintf("%s 各组均值", vname), "bar", p_bar)
+      }
+    }
   }
 }
 

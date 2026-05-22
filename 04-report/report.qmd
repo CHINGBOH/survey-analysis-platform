@@ -83,19 +83,44 @@ render <- list(
   },
 
   ttest = function(x) {
-    cat(sprintf("- 单样本 t（影响程度 vs 中点3）：t=%.3f, %s\n", x$one_sample$t, fmt_p(x$one_sample$p)))
-    ind <- x$independent
-    cat(sprintf("- 独立样本 t（性别×影响程度）：t=%.3f, %s, Cohen's d=%.4f（效应%s）→ %s\n",
-      ind$t_val, fmt_p(ind$t_p), ind$cohens_d, interp_d(ind$cohens_d), sig_badge(ind$t_p)))
-    cat(sprintf("- Mann-Whitney（非参）：W=%.0f, %s\n\n", x$mann_whitney$W, fmt_p(x$mann_whitney$p)))
+    if (!is.null(x$one_sample) && is.data.frame(x$one_sample)) {
+      cat("**单样本 t 检验**\n\n"); print(kable(x$one_sample, row.names=FALSE)); cat("\n")
+    }
+    if (!is.null(x$independent) && is.data.frame(x$independent)) {
+      cat("**独立样本 t 检验（Levene + Student + Welch + Cohen's d）**\n\n")
+      keep <- intersect(c("因变量","分组变量","组1","组1_N","组1_均值","组2","组2_N","组2_均值",
+                          "Levene_p","方差齐性假定","t_Welch","p_Welch","Cohens_d","效应量"),
+                        names(x$independent))
+      print(kable(x$independent[, keep], row.names=FALSE)); cat("\n")
+    }
+    if (!is.null(x$mann_whitney) && is.data.frame(x$mann_whitney)) {
+      cat("**Mann-Whitney U（非参对应）**\n\n")
+      print(kable(x$mann_whitney, row.names=FALSE)); cat("\n")
+    }
+    if (!is.null(x$paired) && is.data.frame(x$paired)) {
+      cat("**配对 t 检验**\n\n"); print(kable(x$paired, row.names=FALSE)); cat("\n")
+    }
   },
 
   anova = function(x) {
-    a <- x$anova
-    cat(sprintf("- ANOVA（年龄×影响程度）：η²=%.4f, ω²=%.4f %s\n",
-      a$eta2, a$omega2, if (a$omega2 <= 0) "（ω²≤0，效应实质为零）" else ""))
-    cat(sprintf("- Kruskal-Wallis（非参）：χ²=%.3f, %s → %s\n\n",
-      x$kruskal$chi2, fmt_p(x$kruskal$p), sig_badge(x$kruskal$p)))
+    if (!is.null(x$summaries) && is.data.frame(x$summaries)) {
+      cat("**单因素 ANOVA 概要（Welch + η²/ω²/partial η²）**\n\n")
+      keep <- intersect(c("因变量","分组变量","组数","N","F","p值","Welch_p","Levene_p",
+                          "eta_squared","partial_eta_squared","omega_squared"),
+                        names(x$summaries))
+      print(kable(x$summaries[, keep], row.names=FALSE)); cat("\n")
+    }
+    if (!is.null(x$kruskal) && is.data.frame(x$kruskal)) {
+      cat("**Kruskal-Wallis（非参对应）**\n\n")
+      print(kable(x$kruskal, row.names=FALSE)); cat("\n")
+    }
+    if (length(x$tukey) > 0) {
+      cat("**Tukey HSD 事后比较**\n\n")
+      for (k in names(x$tukey)) {
+        cat("- *", k, "*\n\n", sep="")
+        print(kable(x$tukey[[k]], row.names=FALSE)); cat("\n")
+      }
+    }
   },
 
   regression = function(x) {
@@ -147,18 +172,27 @@ render <- list(
   },
 
   descriptives = function(x) {
-    cat(sprintf("有效样本 n=%d。各数值变量描述统计：\n\n", x$stats$n))
+    n <- if (!is.null(x$meta$n_total)) x$meta$n_total else (if (!is.null(x$stats$n)) x$stats$n else NA)
+    if (!is.na(n)) cat(sprintf("有效样本 n=%d。\n\n", n))
     d <- x$descriptives
-    keep <- intersect(c("变量","n","mean","sd","median","min","max","skew","kurtosis"), names(d))
-    print(kable(d[, keep], row.names=FALSE))
-    cat("\n\n")
+    if (!is.null(d) && is.data.frame(d)) {
+      keep <- intersect(c("变量","N","均值","标准差","中位数","最小值","最大值","偏度","峰度",
+                          "变量","n","mean","sd","median","min","max","skew","kurtosis"),
+                        names(d))
+      print(kable(d[, keep], row.names=FALSE)); cat("\n")
+    }
+    if (!is.null(x$normality) && is.data.frame(x$normality) && nrow(x$normality) > 0) {
+      cat("**正态性检验（Shapiro-Wilk）**\n\n")
+      print(kable(head(x$normality, 12), row.names=FALSE)); cat("\n")
+    }
   },
 
   crosstabs = function(x) {
     for (nm in names(x)) {
+      if (startsWith(nm, ".")) next
       ct <- x[[nm]]
       if (is.null(ct$measures)) next
-      cat("**", ct$title, "**\n\n", sep="")
+      cat("**", ct$title %||% nm, "**\n\n", sep="")
       print(kable(ct$measures))
       pv <- suppressWarnings(as.numeric(ct$measures$数值[ct$measures$指标=="p值"]))
       cat("\n", sig_badge(pv), "\n\n", sep="")
