@@ -10,32 +10,26 @@ from datetime import date
 
 from pydantic import BaseModel, Field, model_validator
 
-VALID_SURVEYS = ["survey1", "survey2"]
-ALL_MODULES = [
-    "descriptives", "crosstabs", "ttest", "anova", "correlation",
-    "reliability", "factor_analysis", "regression",
-    "mediation", "moderation", "cluster", "power_bootstrap",
-    "survey_specific",
-]
+from app.state import ALL_MODULES
+from app.surveys import is_valid_survey_id, list_surveys
 
 
 class AnalysisPlan(BaseModel):
-    surveys: list[str] = Field(..., description="要分析的调查，survey1 和/或 survey2")
+    surveys: list[str] = Field(..., description="要分析的 survey_id 列表(每个对应一个已上传文件)")
     modules: list[str] = Field(..., description="要运行的分析模块，或 ['all'] 表示全部")
-    compare: bool = Field(False, description="是否对两个调查做对比分析")
+    compare: bool = Field(False, description="是否做多组对比(需 ≥2 个 survey)")
     focus: str = Field("", description="核心研究问题（自然语言）")
 
     @model_validator(mode="after")
     def _validate(self):
-        # surveys
         if not self.surveys:
             raise ValueError("至少选择一个调查")
-        invalid_s = [s for s in self.surveys if s not in VALID_SURVEYS]
-        if invalid_s:
-            raise ValueError(f"未知调查: {invalid_s}，只能是 {VALID_SURVEYS}")
+        bad = [s for s in self.surveys if not is_valid_survey_id(s)]
+        if bad:
+            raise ValueError(f"survey_id 非法(只能字母数字下划线/中文,≤48 字符): {bad}")
+        # 不强制要求已落库 — set_plan 时可能还没清洗,清洗时再验真
         self.surveys = list(dict.fromkeys(self.surveys))  # dedupe, keep order
 
-        # modules — expand "all"
         if not self.modules:
             raise ValueError("至少选择一个模块")
         if any(m.lower() == "all" for m in self.modules):
@@ -44,12 +38,15 @@ class AnalysisPlan(BaseModel):
             invalid_m = [m for m in self.modules if m not in ALL_MODULES]
             if invalid_m:
                 raise ValueError(f"未知模块: {invalid_m}")
-            # keep canonical order, dedupe
             self.modules = [m for m in ALL_MODULES if m in set(self.modules)]
 
-        # compare implies both surveys
-        if self.compare:
-            self.surveys = list(VALID_SURVEYS)
+        if self.compare and len(self.surveys) < 2:
+            # compare=True 但只给了 1 个 survey → 自动尝试补一个已存在的
+            existing = [s for s in list_surveys() if s not in self.surveys]
+            if existing:
+                self.surveys.append(existing[0])
+            else:
+                raise ValueError("compare=True 需要 ≥2 个 survey,但当前只有一个可用")
 
         return self
 

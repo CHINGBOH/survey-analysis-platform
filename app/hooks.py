@@ -52,7 +52,9 @@ _NEEDS_COMPILE = {"run_report"}
 
 
 def _db_exists() -> bool:
-    return (ROOT / "data" / "db" / "survey1.db").exists()
+    from app.surveys import list_surveys
+    db_dir = ROOT / "data" / "db"
+    return db_dir.exists() and any(db_dir.glob("*.db"))
 
 
 def _any_results() -> bool:

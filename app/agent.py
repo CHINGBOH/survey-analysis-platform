@@ -66,7 +66,7 @@ TOOL_DEFS = [
                 "properties": {
                     "surveys": {
                         "type": "array",
-                        "items": {"type": "string", "enum": ["survey1", "survey2"]},
+                        "items": {"type": "string"},
                         "description": "要分析的调查。单个=单组分析，两个=可对比",
                     },
                     "modules": {
@@ -109,11 +109,7 @@ TOOL_DEFS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "survey_id": {
-                        "type": "string",
-                        "enum": ["survey1", "survey2"],
-                        "description": "调查编号",
-                    }
+                    "survey_id": {"type": "string", "description": "调查编号 (留空则用 sidebar 当前 active_survey_id)"}
                 },
                 "required": ["survey_id"],
             },
@@ -134,8 +130,7 @@ TOOL_DEFS = [
                 "properties": {
                     "target": {
                         "type": "string",
-                        "enum": ["survey1", "survey2", "all"],
-                        "description": "清洗目标，默认 all。配合 source_file 时不能为 all。",
+                        "description": "清洗目标 survey_id (留空则用 active_survey_id; 'all' 表示清洗仓库所有已知 survey)",
                     },
                     "source_file": {
                         "type": "string",
@@ -163,7 +158,7 @@ TOOL_DEFS = [
                 "properties": {
                     "survey_id": {
                         "type": "string",
-                        "description": "目标 survey id（字母数字下划线，如 survey1 / custom_2026q1）",
+                        "description": "目标 survey_id (字母数字下划线/中文, ≤48 字符, 通常从文件名派生)",
                     },
                     "source_file": {
                         "type": "string",
@@ -247,11 +242,7 @@ TOOL_DEFS = [
                         ],
                         "description": "模块名称",
                     },
-                    "survey_id": {
-                        "type": "string",
-                        "enum": ["survey1", "survey2"],
-                        "description": "调查编号",
-                    },
+                    "survey_id": {"type": "string", "description": "调查编号 (留空则用 sidebar 当前 active_survey_id)"},
                 },
                 "required": ["module", "survey_id"],
             },
@@ -312,7 +303,7 @@ TOOL_DEFS = [
                 "type": "object",
                 "properties": {
                     "module": {"type": "string", "description": "模块名,如 descriptives / ttest / regression"},
-                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"], "description": "默认 survey1"},
+                    "survey_id": {"type": "string", "description": "留空则用 active_survey_id"},
                 },
                 "required": ["module"],
             },
@@ -333,7 +324,7 @@ TOOL_DEFS = [
                 "type": "object",
                 "properties": {
                     "module": {"type": "string", "description": "模块名"},
-                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
+                    "survey_id": {"type": "string", "description": "目标 survey_id (见 sidebar 注入的 active_survey_id)"},
                 },
                 "required": ["module"],
             },
@@ -356,7 +347,7 @@ TOOL_DEFS = [
                 "type": "object",
                 "properties": {
                     "template": {"type": "string", "enum": ["minimal", "standard", "full"], "description": "模板"},
-                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
+                    "survey_id": {"type": "string", "description": "目标 survey_id (见 sidebar 注入的 active_survey_id)"},
                     "title": {"type": "string"},
                     "org_name": {"type": "string"},
                 },
@@ -372,7 +363,7 @@ TOOL_DEFS = [
                 "type": "object",
                 "properties": {
                     "template": {"type": "string", "enum": ["minimal", "standard", "full"]},
-                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
+                    "survey_id": {"type": "string", "description": "目标 survey_id (见 sidebar 注入的 active_survey_id)"},
                 },
             },
         },
@@ -385,7 +376,7 @@ TOOL_DEFS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
+                    "survey_id": {"type": "string", "description": "目标 survey_id (见 sidebar 注入的 active_survey_id)"},
                 },
             },
         },
@@ -428,7 +419,7 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
             state=state,
         ),
         "get_variable_catalog": lambda: get_variable_catalog(
-            survey_id=inputs.get("survey_id", "survey1")
+            survey_id=inputs.get("survey_id")
         ),
         "run_clean": lambda: run_clean(
             target=inputs.get("target", "all"),
@@ -447,7 +438,7 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
             modules=inputs["modules"], survey_id=inputs.get("survey_id"), state=state
         ),
         "get_results": lambda: get_results(
-            module=inputs["module"], survey_id=inputs.get("survey_id", "survey1"), state=state
+            module=inputs["module"], survey_id=inputs.get("survey_id"), state=state
         ),
         "run_compile": lambda: run_compile(state=state),
         "run_report": lambda: run_report(state=state),
@@ -461,27 +452,27 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
         ),
         "interpret_results": lambda: interpret_results(
             module=inputs["module"],
-            survey_id=inputs.get("survey_id", "survey1"),
+            survey_id=inputs.get("survey_id"),
             state=state,
         ),
         "render_charts": lambda: render_charts(
             module=inputs["module"],
-            survey_id=inputs.get("survey_id", "survey1"),
+            survey_id=inputs.get("survey_id"),
             state=state,
         ),
         "list_report_templates": lambda: list_report_templates(),
         "generate_word": lambda: generate_word(
             template=inputs.get("template", "standard"),
-            survey_id=inputs.get("survey_id", "survey1"),
+            survey_id=inputs.get("survey_id"),
             title=inputs.get("title", "问卷调查分析报告"),
             org_name=inputs.get("org_name", "调查分析平台"),
         ),
         "generate_pdf": lambda: generate_pdf(
             template=inputs.get("template", "standard"),
-            survey_id=inputs.get("survey_id", "survey1"),
+            survey_id=inputs.get("survey_id"),
         ),
         "export_charts_bundle": lambda: export_charts_bundle(
-            survey_id=inputs.get("survey_id", "survey1"),
+            survey_id=inputs.get("survey_id"),
         ),
     }
     fn = fns.get(name)

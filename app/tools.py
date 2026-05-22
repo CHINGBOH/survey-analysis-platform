@@ -14,6 +14,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from app.requirements_schema import AnalysisPlan
+from app.surveys import default_survey, derive_survey_id, list_surveys, survey_suffix as _suffix_lookup
 
 ROOT = Path(__file__).resolve().parent.parent
 LOG_FILE = ROOT / "logs" / "pipeline.log"
@@ -73,19 +74,20 @@ def load_plan() -> Optional[dict]:
 
 
 def survey_suffix(survey_id: str) -> str:
-    return "s1" if survey_id == "survey1" else "s2"
+    return _suffix_lookup(survey_id)
 
 
 def _resolve_surveys(survey_id: Optional[str] = None) -> List[str]:
     """Decide which surveys a tool should operate on.
-    Priority: explicit survey_id override > active plan > both (default).
+    Priority: explicit survey_id override > active plan > all known surveys.
     """
     if survey_id and survey_id != "all":
         return [survey_id]
     plan = load_plan()
     if plan and plan.get("surveys"):
         return plan["surveys"]
-    return ["survey1", "survey2"]
+    surveys = list_surveys()
+    return surveys if surveys else ["survey1"]
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -204,8 +206,10 @@ def preview_data(file_path: Optional[str] = None, n_rows: int = 5, state=None) -
 # Tool: get_variable_catalog
 # ──────────────────────────────────────────────────────────────────
 
-def get_variable_catalog(survey_id: str = "survey1") -> Dict:
+def get_variable_catalog(survey_id: Optional[str] = None) -> Dict:
     """Read variables table from SQLite."""
+    if not survey_id:
+        survey_id = default_survey() or "survey1"
     db_path = ROOT / "data" / "db" / f"{survey_id}.db"
     if not db_path.exists():
         return _err(f"{survey_id}.db 不存在，请先运行 run_clean。")
@@ -400,12 +404,14 @@ def run_selected_analysis(modules: list, survey_id: Optional[str] = None, state=
 # Tool: get_results — read computed statistics from a module's .rds
 # ──────────────────────────────────────────────────────────────────
 
-def get_results(module: str, survey_id: str = "survey1", state=None) -> Dict:
+def get_results(module: str, survey_id: Optional[str] = None, state=None) -> Dict:
     """Read the actual computed numbers from a module result (.rds → JSON).
     This lets the agent interpret REAL values instead of hallucinating them.
     """
     if module not in VALID_MODULES:
         return _err(f"未知模块: {module}")
+    if not survey_id:
+        survey_id = default_survey() or "survey1"
     suffix = survey_suffix(survey_id)
     path = OUTPUT_RESULTS / f"{module}_{suffix}.rds"
     if not path.exists():
@@ -497,10 +503,10 @@ def check_pipeline_status(state=None) -> Dict:
     """
     plan = load_plan()
     if plan:
-        plan_surveys = plan.get("surveys", ["survey1", "survey2"])
+        plan_surveys = plan.get("surveys") or list_surveys() or ["survey1"]
         plan_modules = plan.get("modules", VALID_MODULES)
     else:
-        plan_surveys = ["survey1", "survey2"]
+        plan_surveys = list_surveys() or ["survey1"]
         plan_modules = VALID_MODULES
 
     suffixes = [survey_suffix(s) for s in plan_surveys]
@@ -641,10 +647,10 @@ def dispatch_subagent(role: str, task: str, context: str = "", state=None) -> Di
 # ──────────────────────────────────────────────────────────────────
 
 def _survey_suffix_local(s: str) -> str:
-    return "s1" if s == "survey1" else ("s2" if s == "survey2" else s)
+    return _suffix_lookup(s)
 
 
-def interpret_results(module: str, survey_id: str = "survey1", state=None) -> Dict:
+def interpret_results(module: str, survey_id: Optional[str] = None, state=None) -> Dict:
     """读取 module 的 RDS,转 JSON 投给 LLM,在 ModuleInterpretation schema 约束下生成解读。
 
     保证:每条 key_findings 必有 variable + statistic_name + value(来自真实 RDS)。
@@ -652,6 +658,8 @@ def interpret_results(module: str, survey_id: str = "survey1", state=None) -> Di
     """
     if module not in VALID_MODULES:
         return _err(f"未知模块: {module}")
+    if not survey_id:
+        survey_id = default_survey() or "survey1"
 
     rds_path = OUTPUT_RESULTS / f"{module}_{_survey_suffix_local(survey_id)}.rds"
     if not rds_path.exists():
@@ -706,7 +714,7 @@ def interpret_results(module: str, survey_id: str = "survey1", state=None) -> Di
 # Tool: render_charts — 调用 lib/charts.R 把模块结果渲染为 PNG 图表包
 # ──────────────────────────────────────────────────────────────────
 
-def render_charts(module: str, survey_id: str = "survey1", state=None) -> Dict:
+def render_charts(module: str, survey_id: Optional[str] = None, state=None) -> Dict:
     """渲染指定模块的图表到 output/charts/<module>_<sid>/。
 
     每个模块对应一组图(详见 02-analyze/render_charts.R 路由表):
@@ -718,6 +726,8 @@ def render_charts(module: str, survey_id: str = "survey1", state=None) -> Dict:
     """
     if module not in VALID_MODULES:
         return _err(f"未知模块: {module}")
+    if not survey_id:
+        survey_id = default_survey() or "survey1"
 
     suffix = _survey_suffix_local(survey_id)
     rds_path = OUTPUT_RESULTS / f"{module}_{suffix}.rds"
@@ -757,11 +767,12 @@ def render_charts(module: str, survey_id: str = "survey1", state=None) -> Dict:
 
 
 # ─── 报告生成工具 (Word / PDF / 图片包) ─────────────────────
-def generate_word(template: str = "standard", survey_id: str = "survey1",
+def generate_word(template: str = "standard", survey_id: Optional[str] = None,
                   title: str = "问卷调查分析报告", org_name: str = "调查分析平台") -> dict:
     """生成 Word 报告 (.docx)"""
     from app.reports import generate_word_report, export_results_to_json
-    suffix = "s1" if survey_id == "survey1" else "s2" if survey_id == "survey2" else survey_id
+    sid = survey_id or default_survey() or "survey1"
+    suffix = _suffix_lookup(sid)
     export_results_to_json(suffix)
     res = generate_word_report(template=template, survey_label=suffix,
                                 title=title, org_name=org_name)
@@ -772,10 +783,11 @@ def generate_word(template: str = "standard", survey_id: str = "survey1",
                next_actions=["可下载 / 在 UI 预览", "preview_report 渲染缩略图"])
 
 
-def generate_pdf(template: str = "standard", survey_id: str = "survey1") -> dict:
+def generate_pdf(template: str = "standard", survey_id: Optional[str] = None) -> dict:
     """生成 PDF 报告"""
     from app.reports import generate_pdf_report, export_results_to_json
-    suffix = "s1" if survey_id == "survey1" else "s2" if survey_id == "survey2" else survey_id
+    sid = survey_id or default_survey() or "survey1"
+    suffix = _suffix_lookup(sid)
     export_results_to_json(suffix)
     res = generate_pdf_report(template=template, survey_label=suffix)
     if not res.get("ok"):
@@ -785,10 +797,11 @@ def generate_pdf(template: str = "standard", survey_id: str = "survey1") -> dict
                next_actions=["preview_report 嵌入预览"])
 
 
-def export_charts_bundle(survey_id: str = "survey1") -> dict:
+def export_charts_bundle(survey_id: Optional[str] = None) -> dict:
     """打包导出所有图表 + 缩略图 PDF"""
     from app.reports import export_image_bundle
-    suffix = "s1" if survey_id == "survey1" else "s2" if survey_id == "survey2" else survey_id
+    sid = survey_id or default_survey() or "survey1"
+    suffix = _suffix_lookup(sid)
     res = export_image_bundle(suffix)
     return _ok(f"图片包已打包: {res['n_images']} 张图 / {res['n_modules']} 模块",
                artifacts={"zip": res["zip"], "dir": res["dir"], "n": res["n_images"]})

@@ -77,6 +77,7 @@ class AppState:
     stage: PipelineStage = PipelineStage.IDLE
     uploaded_path: Optional[str] = None
     uploaded_filename: Optional[str] = None
+    active_survey_id: Optional[str] = None  # 当前活跃 survey,从上传文件名派生
     module_statuses: Dict[str, ModuleStatus] = field(
         default_factory=lambda: {m: ModuleStatus.PENDING for m in ALL_MODULES}
     )

@@ -147,24 +147,29 @@ def render_sidebar(state, api_messages: list):
 
 def _inject_data_notice(api_messages: list, filename: str, state):
     """Tell the agent that the user has explicitly selected a specific data file."""
+    from app.surveys import derive_survey_id
     state.stage = PipelineStage.UPLOADED
+    sid = derive_survey_id(filename)
+    # 写入 state,后续工具默认使用
+    setattr(state, "active_survey_id", sid)
     content = (
-        f"[系统通知] 用户已显式选择数据文件: {filename}（路径 data/raw/{filename}）。"
-        f"请 preview_data 预览该文件，然后询问用户的分析意图（哪个调查/哪些模块/核心问题），"
-        f"意图清楚后用 set_analysis_plan 锁定计划。\n"
-        f"📦 入库选项：\n"
-        f"  - 消费券问卷（gender/voucher/ai_accept 等字段齐全）→ "
-        f"run_clean(target='survey1' 或 'survey2', source_file='data/raw/{filename}')，"
-        f"可继续跑 13 个 R 统计模块。\n"
-        f"  - 其他主题问卷（字段不匹配消费券 schema）→ "
-        f"run_generic_ingest(survey_id='custom_xxx', source_file='data/raw/{filename}')，"
-        f"原样入 raw_data 表，仅支持 preview_data / 自定义 SQL，R 模块不可用。\n"
-        f"⚠️ 调用 run_clean 时必须传 source_file，否则会读默认硬编码文件而不是用户刚选的这个。"
+        f"[系统通知 — 文件已上传]\n"
+        f"- 文件名: {filename}\n"
+        f"- 派生 survey_id: `{sid}`  ← 这是本次唯一的数据源,后续所有工具默认用它\n"
+        f"- 路径: data/raw/{filename}\n\n"
+        f"⚠️ 关键约束: 用户只上传了**一个**文件 = **一个** survey。"
+        f"不要发明 survey2 / 不要建议'拆成两组对比' / 不要问'分析哪一份'。"
+        f"如果用户后续上传第二个文件,届时会再发系统通知。\n\n"
+        f"📋 下一步建议(可直接执行,不必再问用户):\n"
+        f"1. preview_data 看结构\n"
+        f"2. 若像消费券问卷 → `run_clean(target='{sid}', source_file='data/raw/{filename}')`\n"
+        f"   若字段不匹配 → `run_generic_ingest(survey_id='{sid}', source_file='data/raw/{filename}')`\n"
+        f"3. 入库成功 → 询问用户分析意图(全套/重点/单模块) → `set_analysis_plan(surveys=['{sid}'], modules=[...])`\n"
+        f"4. 之后 run_selected_analysis / interpret_results / render_charts / 报告均用 survey_id='{sid}'。"
     )
-    # Only inject once per file
     already = any(
         isinstance(m.get("content"), str)
-        and "[系统通知]" in m["content"]
+        and "[系统通知 — 文件已上传]" in m["content"]
         and filename in m["content"]
         for m in api_messages
         if m.get("role") == "user"

@@ -18,12 +18,12 @@ from pathlib import Path
 from typing import List
 
 ROOT = Path(__file__).resolve().parent.parent
-KNOWN_MODULES = [
-    "descriptives", "crosstabs", "ttest", "anova", "correlation",
-    "reliability", "factor_analysis", "regression", "mediation",
-    "moderation", "cluster", "power_bootstrap", "survey_specific",
-]
-KNOWN_SURVEYS = ["survey1", "survey2"]
+from app.state import ALL_MODULES as KNOWN_MODULES
+from app.surveys import is_valid_survey_id, list_surveys
+
+
+def _known_surveys() -> List[str]:
+    return list_surveys()
 
 
 @dataclass
@@ -52,9 +52,9 @@ def _enabled() -> bool:
 def _static_checks(surveys, modules, focus) -> List[str]:
     """免 LLM 的硬规则,优先拦截 LLM 也判断不出的事实错误。"""
     errs: List[str] = []
-    bad_surveys = [s for s in surveys if s not in KNOWN_SURVEYS]
+    bad_surveys = [s for s in surveys if not is_valid_survey_id(s)]
     if bad_surveys:
-        errs.append(f"survey 名称非法: {bad_surveys}, 仅支持 {KNOWN_SURVEYS}")
+        errs.append(f"survey_id 非法(只能字母数字下划线/中文,≤48): {bad_surveys}")
     flat_modules = modules
     if flat_modules and flat_modules != ["all"]:
         bad = [m for m in flat_modules if m not in KNOWN_MODULES]
@@ -84,7 +84,7 @@ def _llm_review(plan: dict, client=None) -> ReviewVerdict:
     user_msg = (
         "请评审以下分析计划:\n"
         f"```json\n{json.dumps(plan, ensure_ascii=False, indent=2)}\n```\n"
-        f"合法 surveys: {KNOWN_SURVEYS}\n"
+        f"当前可用 surveys: {_known_surveys()}\n"
         f"合法 modules: {KNOWN_MODULES}\n"
     )
 

@@ -168,17 +168,18 @@ def render_analyses_page(state, api_messages):
                 if rds.exists():
                     st.caption(f"📦 输出: {rds.stat().st_size // 1024} KB")
                 b1, b2 = st.columns(2)
+                _sid = getattr(state, "active_survey_id", None) or "survey1"
                 if b1.button("▶️ 运行", key=f"run_{mod}", use_container_width=True):
                     api_messages.append({
                         "role": "user",
-                        "content": f"请运行 run_analysis_module('{mod}','survey1') 并 render_charts('{mod}')。"
+                        "content": f"请运行 run_analysis_module('{mod}','{_sid}') 并 render_charts('{mod}','{_sid}')。"
                     })
                     st.rerun()
                 if b2.button("📖 查看结果", key=f"view_{mod}", use_container_width=True,
                              disabled=not rds.exists()):
                     api_messages.append({
                         "role": "user",
-                        "content": f"请 get_results('{mod}','survey1') 并 interpret_results 给出解读。"
+                        "content": f"请 get_results('{mod}','{_sid}') 并 interpret_results 给出解读。"
                     })
                     st.rerun()
         st.write("")
