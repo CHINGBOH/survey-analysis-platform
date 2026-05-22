@@ -37,3 +37,5 @@ output/reports/*.zip
 output/reports/images_*/
 
 output/results/*.json
+.env
+.env.local

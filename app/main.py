@@ -13,6 +13,13 @@ import streamlit.components.v1 as components
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+# Load .env (if present) BEFORE reading env vars
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env")
+except ImportError:
+    pass
+
 from app.agent import run_agent_turn
 from app.state import AppState, PipelineStage
 from app.ui.chat import render_message_history, render_tool_event_live

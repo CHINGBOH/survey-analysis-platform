@@ -84,6 +84,35 @@ survey-analysis-platform/
 
 ## 快速开始
 
+### 0. 配置环境变量(只配置一次)
+
+```bash
+cp .env.example .env       # 若已存在 .env 跳过
+# 编辑 .env,填入:
+#   DEEPSEEK_API_KEY=sk-...
+#   LANGFUSE_SECRET_KEY=sk-lf-... (可选)
+#   LANGFUSE_PUBLIC_KEY=pk-lf-... (可选)
+```
+
+`.env` 已被 `.gitignore` 排除,不会提交。`app/main.py` 启动时通过
+`python-dotenv` 自动加载,**无需每次 `export`**。
+
+### 1. 启动 Streamlit 应用(推荐)
+
+```bash
+streamlit run app/main.py --server.port 8501
+# 浏览器打开 http://localhost:8501
+```
+
+界面 5 个 tab:
+- **💬 分析助手** — 自然语言驱动 Agent,自动编排清洗→分析→报告
+- **📁 数据** — SQLite 数据库浏览,分页 + 列筛选
+- **📊 分析模块** — 13 个模块卡片,一键运行
+- **🖼️ 图表画廊** — 缩略图/单图/幻灯片/Plotly 交互预览
+- **📄 报告中心** — HTML/Word/PDF/图片包 生成与下载
+
+### 2. 命令行管道(无 LLM)
+
 ```bash
 # 1. 探索数据
 make explore          # 打开 Jupyter
@@ -92,7 +121,7 @@ make explore          # 打开 Jupyter
 make clean            # 运行 01-clean/*.R
 
 # 3. 全量分析
-make analyze          # 运行所有 02-analyze/*.R（可并行）
+make analyze          # 运行所有 02-analyze/*.R(可并行)
 
 # 4. 整合结果
 make integrate        # 编译所有结果
@@ -107,9 +136,22 @@ make all
 make descriptives     # 只跑描述统计
 make mediation        # 只跑中介分析
 
-# LSP 语法检查（不运行）
+# LSP 语法检查(不运行)
 make lint
 ```
+
+### 3. Agent 工具一览(18 个)
+
+| 类别 | 工具 |
+|---|---|
+| 数据 | `load_dataset`, `inspect_schema`, `set_analysis_plan` |
+| 清洗 | `run_cleaning` |
+| 分析 | `run_analysis_module`, `get_results`, `interpret_results` |
+| 图表 | `render_charts` |
+| 整合 | `run_compile`, `run_report` |
+| 报告 | `list_report_templates`, `generate_word`, `generate_pdf`, `export_charts_bundle` |
+| 状态 | `check_pipeline_status`, `read_log` |
+| 编排 | `dispatch_subagent` |
 
 ## 技术栈
 
