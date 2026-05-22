@@ -124,21 +124,64 @@ render <- list(
   },
 
   regression = function(x) {
-    lr <- x$linear
-    if (!is.null(lr$error)) { cat("**线性回归**：> ⚠️ ", lr$error, "\n\n", sep="")
-    } else {
-      cat(sprintf("- **线性回归**：R²=%.4f（解释力%s），调整 R²=%.4f，DW=%.3f\n",
-        lr$r2, interp_r2(lr$r2), lr$adj_r2, lr$dw))
-      if (lr$r2 < 0.02) cat("  - ⚠️ 判读：模型几乎不能解释因变量变异，预测价值极低。\n")
+    if (length(x$linear) > 0) {
+      cat("**线性回归**\n\n")
+      for (k in names(x$linear)) {
+        m <- x$linear[[k]]
+        if (!is.null(m$error)) { cat("- *", k, "*: > ⚠️ ", m$error, "\n\n", sep=""); next }
+        cat("- *", k, "*\n\n", sep="")
+        print(kable(m$model_summary, row.names=FALSE)); cat("\n")
+        print(kable(m$coefficients, row.names=FALSE)); cat("\n")
+        if (!is.null(m$collinearity)) {
+          cat("共线性检查 (VIF/Tol):\n\n")
+          print(kable(m$collinearity, row.names=FALSE)); cat("\n")
+        }
+        if (!is.null(m$residual_diagnostics$tests)) {
+          cat("残差诊断:\n\n")
+          print(kable(m$residual_diagnostics$tests, row.names=FALSE)); cat("\n")
+        }
+      }
     }
-    lg <- x$logistic
-    if (!is.null(lg$error)) { cat("- **Logistic**：> ⚠️ ", lg$error, "\n\n", sep="")
-    } else {
-      cat(sprintf("- **Logistic ROC**：AUC=%.4f（%s），灵敏度=%.4f，特异度=%.4f，Youden=%.4f\n",
-        lg$auc, interp_auc(lg$auc), lg$sensitivity, lg$specificity, lg$youden))
-      if (lg$auc < 0.6) cat("  - ⚠️ 判读：AUC 接近 0.5，模型区分能力接近随机。\n")
+    if (length(x$logistic) > 0) {
+      cat("**二元 Logistic 回归**\n\n")
+      for (k in names(x$logistic)) {
+        m <- x$logistic[[k]]
+        if (!is.null(m$error)) { cat("- *", k, "*: > ⚠️ ", m$error, "\n\n", sep=""); next }
+        cat("- *", k, "*\n\n", sep="")
+        print(kable(m$model_summary, row.names=FALSE)); cat("\n")
+        print(kable(m$coefficients, row.names=FALSE)); cat("\n")
+        if (!is.null(m$classification_table)) {
+          cat("分类表 (cutoff=0.5):\n\n")
+          print(kable(m$classification_table)); cat("\n")
+        }
+      }
     }
-    cat("\n")
+    if (length(x$hierarchical) > 0) {
+      cat("**层次回归 (分块进入)**\n\n")
+      for (k in names(x$hierarchical)) {
+        m <- x$hierarchical[[k]]
+        if (!is.null(m$error)) next
+        cat("- *", k, "*\n\n", sep="")
+        print(kable(m$blocks_summary, row.names=FALSE)); cat("\n")
+      }
+    }
+    if (length(x$multinomial) > 0) {
+      cat("**多分类 Logistic**\n\n")
+      for (k in names(x$multinomial)) {
+        m <- x$multinomial[[k]]
+        if (!is.null(m$error)) next
+        cat("OR:\n\n"); print(kable(m$OR)); cat("\n")
+      }
+    }
+    if (length(x$poisson) > 0) {
+      cat("**Poisson 计数回归**\n\n")
+      for (k in names(x$poisson)) {
+        m <- x$poisson[[k]]
+        if (!is.null(m$error)) next
+        print(kable(m$model_summary, row.names=FALSE)); cat("\n")
+        print(kable(m$coefficients, row.names=FALSE)); cat("\n")
+      }
+    }
   },
 
   mediation = function(x) {

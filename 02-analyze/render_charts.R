@@ -223,24 +223,58 @@ if (module == "anova") {
 }
 
 if (module == "regression") {
-  # 回归 → 系数 forest plot
-  if (!is.null(obj$linear) && is.data.frame(obj$linear)) {
-    df <- obj$linear
-    coef_col <- intersect(c("Estimate", "beta", "估计"), names(df))[1]
-    se_col <- intersect(c("Std.Error", "se", "标准误"), names(df))[1]
-    name_col <- intersect(c("term", "变量", "Variable"), names(df))[1]
-    if (!is.na(coef_col) && !is.na(name_col)) {
-      df$est <- df[[coef_col]]
-      df$lo <- if (!is.na(se_col)) df$est - 1.96 * df[[se_col]] else df$est
-      df$hi <- if (!is.na(se_col)) df$est + 1.96 * df[[se_col]] else df$est
-      df$name <- factor(df[[name_col]], levels = df[[name_col]])
-      p <- ggplot(df, aes(x = est, y = name)) +
-        geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-        geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0.2, color = "#4C78A8") +
-        geom_point(size = 3, color = "#4C78A8") +
-        labs(title = "回归系数(95% CI)", x = "估计值", y = "") +
+  # 新结构: obj$linear / obj$logistic 都是 list of {coefficients, ...}
+  forest_one <- function(coef_df, key, prefix, title_prefix, ci_lo_col, ci_hi_col, est_col) {
+    if (is.null(coef_df) || !is.data.frame(coef_df)) return(invisible())
+    cf <- coef_df[coef_df$变量 != "(Intercept)", , drop = FALSE]
+    if (nrow(cf) == 0) return(invisible())
+    cf$est <- suppressWarnings(as.numeric(cf[[est_col]]))
+    cf$lo  <- suppressWarnings(as.numeric(cf[[ci_lo_col]]))
+    cf$hi  <- suppressWarnings(as.numeric(cf[[ci_hi_col]]))
+    cf <- cf[is.finite(cf$est), , drop = FALSE]
+    if (nrow(cf) == 0) return(invisible())
+    cf$name <- factor(cf$变量, levels = rev(cf$变量))
+    ref_x <- if (prefix == "or") 1 else 0
+    p <- ggplot(cf, aes(x = est, y = name)) +
+      geom_vline(xintercept = ref_x, linetype = "dashed", color = "grey50") +
+      geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0.25, color = SAP_PALETTE[1]) +
+      geom_point(size = 3.5, color = SAP_PALETTE[1]) +
+      labs(title = paste0(title_prefix, ": ", key),
+           x = if (prefix == "or") "OR (95% CI)" else "B 估计 (95% CI)",
+           y = "") +
+      theme_sap()
+    add_chart(paste0(prefix, "_forest_", gsub("[^A-Za-z0-9]+", "_", key)),
+              paste(title_prefix, key), "forest", p, w = 7.5, h = 5)
+  }
+  # 线性模型: forest of B + 95%CI
+  for (key in names(obj$linear %||% list())) {
+    m <- obj$linear[[key]]; if (!is.null(m$error)) next
+    forest_one(m$coefficients, key, "lin", "线性回归系数森林图",
+               "下95CI", "上95CI", "B估计")
+  }
+  # Logistic: forest of OR + 95%CI
+  for (key in names(obj$logistic %||% list())) {
+    m <- obj$logistic[[key]]; if (!is.null(m$error)) next
+    forest_one(m$coefficients, key, "or", "Logistic OR 森林图",
+               "下95CI", "上95CI", "OR比值比")
+    # ROC 曲线
+    cf <- m$model_summary
+    if (!is.null(cf) && is.data.frame(cf) && !is.na(cf$AUC[1])) {
+      # 真 ROC 需要预测分数;此处用 sens/spec 标注的等效图
+      auc_v <- cf$AUC[1]; sens <- cf$灵敏度[1]; spec <- cf$特异度[1]
+      roc_df <- data.frame(FPR = c(0, 1 - spec, 1), TPR = c(0, sens, 1))
+      p_roc <- ggplot(roc_df, aes(x = FPR, y = TPR)) +
+        geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey60") +
+        geom_line(color = SAP_PALETTE[2], linewidth = 1.2) +
+        geom_point(color = SAP_PALETTE[2], size = 3) +
+        annotate("text", x = 0.6, y = 0.2,
+                 label = sprintf("AUC = %.3f", auc_v), size = 5) +
+        coord_equal() +
+        labs(title = paste("Logistic ROC:", key),
+             x = "1 - 特异度 (FPR)", y = "灵敏度 (TPR)") +
         theme_sap()
-      add_chart("coef_forest", "回归系数森林图", "forest", p)
+      add_chart(paste0("roc_", gsub("[^A-Za-z0-9]+", "_", key)),
+                paste("ROC", key), "roc", p_roc, w = 6, h = 6)
     }
   }
 }
