@@ -1,13 +1,14 @@
 # Makefile — 问卷数据分析管道编排
 # 用法: make all | make clean | make analyze | make report
 
-.PHONY: all clean analyze integrate report lint explore help
+.PHONY: all clean analyze integrate report lint explore app help
 
 # 默认目标
 all: clean analyze integrate report
 
 help:
 	@echo "Survey Analysis Pipeline"
+	@echo "  make app        — 启动 Streamlit 智能分析助手 (port 8501)"
 	@echo "  make explore    — 启动 Jupyter 数据探索"
 	@echo "  make clean      — Excel → SQLite 清洗入库"
 	@echo "  make analyze    — 运行所有统计分析模块"
@@ -15,6 +16,11 @@ help:
 	@echo "  make report     — 生成 Quarto HTML 报告"
 	@echo "  make lint       — R 脚本语法检查 (LSP)"
 	@echo "  make all        — 一键全流程"
+
+# ====== Streamlit 应用 ======
+app:
+	@echo "启动 Streamlit 分析助手..."
+	PYTHONPATH=$(shell pwd) streamlit run app/main.py --server.port 8501
 
 # ====== 数据探索 ======
 explore:

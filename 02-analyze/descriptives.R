@@ -4,7 +4,7 @@
 library(DBI); library(RSQLite); library(psych)
 source("lib/utils.R"); module_header("描述统计")
 
-for (survey_id in c("survey1","survey2")) {
+for (survey_id in target_surveys()) {
   con <- dbConnect(RSQLite::SQLite(), sprintf("data/db/%s.db", survey_id))
   on.exit(dbDisconnect(con))
 

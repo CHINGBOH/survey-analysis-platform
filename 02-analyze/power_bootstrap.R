@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 source("lib/db.R"); source("lib/utils.R"); library(boot); module_header("Bootstrap + Power")
-for (sid in c("survey1","survey2")) {
+for (sid in target_surveys()) {
   df <- read_respondents(sid)
   # Bootstrap 均值
   imp <- df$impact_num[!is.na(df$impact_num)]

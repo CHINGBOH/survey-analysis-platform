@@ -3,7 +3,7 @@
 .libPaths(c("~/R/libs", .libPaths()))
 library(DBI); library(RSQLite); library(psych); source("lib/utils.R"); module_header("信度分析")
 
-for (survey_id in c("survey1","survey2")) {
+for (survey_id in target_surveys()) {
   con <- dbConnect(RSQLite::SQLite(), sprintf("data/db/%s.db", survey_id))
   likert <- dbGetQuery(con, sprintf("SELECT ai_accept, meta_accept, green_accept, second_accept FROM respondents WHERE survey='%s'", survey_id))
   dbDisconnect(con)

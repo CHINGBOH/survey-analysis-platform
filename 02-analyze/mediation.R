@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 source("lib/db.R"); source("lib/utils.R"); library(boot); module_header("中介效应")
-for (sid in c("survey1","survey2")) {
+for (sid in target_surveys()) {
   df <- read_respondents(sid)
   med_df <- df %>% mutate(
     accept_mean = rowMeans(cbind(ai_accept,meta_accept,green_accept,second_accept),na.rm=T)

@@ -3,7 +3,7 @@
 source("lib/spss_tables.R"); source("lib/db.R"); source("lib/utils.R")
 module_header("t检验")
 
-for (survey_id in c("survey1","survey2")) {
+for (survey_id in target_surveys()) {
   df <- read_respondents(survey_id)
   t1 <- t.test(df$impact_num, mu=3)
   t2 <- ttest_table(impact_num ~ gender, data=df)

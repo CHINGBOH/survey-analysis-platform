@@ -2,7 +2,7 @@
 source("lib/spss_tables.R"); source("lib/db.R"); source("lib/utils.R")
 library(car); module_header("ANOVA")
 
-for (survey_id in c("survey1","survey2")) {
+for (survey_id in target_surveys()) {
   df <- read_respondents(survey_id)
   aov1 <- aov(impact_num ~ age_group, data=df)
   aov_r <- anova_table(aov1)

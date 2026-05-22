@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 source("lib/db.R"); source("lib/utils.R"); library(car); library(lmtest); library(pROC); module_header("回归分析")
-for (sid in c("survey1","survey2")) {
+for (sid in target_surveys()) {
   df <- read_respondents(sid)
   # 线性回归
   lm_df <- df %>% dplyr::select(impact_num, extra_spend, saving_amt) %>% na.omit()
