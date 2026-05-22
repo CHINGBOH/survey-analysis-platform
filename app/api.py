@@ -134,12 +134,13 @@ def list_all_surveys():
 @app.get("/api/status")
 def pipeline_status():
     """整体管道状态 — stage / 模块进度 / 已完成 / plan."""
+    active = _STATE.active_survey_id or default_survey()
     return {
         "stage": _STATE.stage.value,
-        "active_survey_id": _STATE.active_survey_id,
+        "active_survey_id": active,
         "uploaded_filename": _STATE.uploaded_filename,
         "clean_done": _STATE.clean_done,
-        "modules": {m: s.value for m, s in _STATE.module_statuses.items()},
+        "modules": {m: (s.value if hasattr(s, "value") else str(s)) for m, s in _STATE.module_statuses.items()},
         "done_modules": _STATE.done_modules(),
         "report_path": _STATE.report_path,
         "plan": _STATE.plan,
@@ -224,7 +225,7 @@ def list_reports():
         return {"reports": []}
     items = []
     for p in sorted(REPORTS.iterdir()):
-        if p.is_file():
+        if p.is_file() and not p.name.startswith("."):
             items.append({
                 "name": p.name,
                 "size": p.stat().st_size,
