@@ -24,8 +24,10 @@ from app.observability import (
     wrap_openai_client,
 )
 from app.router import filter_tools, route
+from app.skill_loader import build_catalogue_block
 from app.tools import (
     check_pipeline_status,
+    dispatch_subagent,
     get_results,
     get_variable_catalog,
     preview_data,
@@ -232,13 +234,42 @@ TOOL_DEFS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "dispatch_subagent",
+            "description": (
+                "把专项任务委派给具备特定专长的子 agent(见系统提示「可调度 Subagent 角色」目录)。"
+                "子 agent 不能执行工具,只产出文本建议; 主 agent 据此再决定后续动作。"
+                "适用场景: 需要资深视角(如 data-scientist 看建模思路、prompt-engineer 改提示词)、"
+                "或需要把复杂问题拆给独立角色独立思考时。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "role": {"type": "string", "description": "subagent 名称, 如 data-scientist / data-analyst / prompt-engineer"},
+                    "task": {"type": "string", "description": "委派的具体任务"},
+                    "context": {"type": "string", "description": "附加上下文(可选): 已有结果摘要、数据描述、约束条件"},
+                },
+                "required": ["role", "task"],
+            },
+        },
+    },
 ]
 
 
 def _load_system_prompt() -> str:
-    if SYSTEM_PROMPT_PATH.exists():
-        return SYSTEM_PROMPT_PATH.read_text()
-    return "你是问卷调查统计分析助手。"
+    base = (
+        SYSTEM_PROMPT_PATH.read_text()
+        if SYSTEM_PROMPT_PATH.exists()
+        else "你是问卷调查统计分析助手。"
+    )
+    # 动态注入 skill / subagent 目录,让主 agent 知道可用的知识库和可委派的角色
+    try:
+        catalogue = build_catalogue_block()
+    except Exception:
+        catalogue = ""
+    return base + ("\n" + catalogue if catalogue else "")
 
 
 def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
@@ -280,6 +311,12 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
         "run_report": lambda: run_report(state=state),
         "check_pipeline_status": lambda: check_pipeline_status(state=state),
         "read_log": lambda: read_log(n_lines=inputs.get("n_lines", 30)),
+        "dispatch_subagent": lambda: dispatch_subagent(
+            role=inputs["role"],
+            task=inputs["task"],
+            context=inputs.get("context", ""),
+            state=state,
+        ),
     }
     fn = fns.get(name)
     if fn is None:

@@ -95,12 +95,35 @@ def set_analysis_plan(surveys, modules, compare=False, focus="", state=None) -> 
     """Validate (Pydantic) and persist the agent's analysis plan.
     Validation here is the hallucination filter: bad survey/module names are
     rejected before any R script runs. Setting a new plan clears stale results.
+
+    plan-review-gate: 计划通过 Pydantic 后,再走三维对抗式评审(Feasibility/
+    Completeness/Scope),全部 PASS 才落盘; 任一 FAIL 返回 blocked,带具体 reasons
+    给主 agent 自我纠正。可通过 PLAN_REVIEW_GATE=0 关闭。
     """
     try:
         plan = AnalysisPlan(surveys=surveys, modules=modules, compare=compare, focus=focus)
     except ValidationError as e:
         msgs = "; ".join(err.get("msg", str(err)) for err in e.errors())
         return _err(f"分析计划校验失败: {msgs}")
+
+    # ── plan-review-gate ──────────────────────────────────────────
+    from app.plan_review_gate import review_plan
+    verdict = review_plan(
+        {"surveys": plan.surveys, "modules": plan.modules, "compare": plan.compare, "focus": plan.focus},
+    )
+    if not verdict.passed:
+        reasons = verdict.reasons() or ["评审未通过(未给出具体原因)"]
+        return {
+            "status": "blocked",
+            "summary": "plan-review-gate 拦截: 计划未通过对抗式评审,请根据原因修改后重新提交。",
+            "artifacts": {
+                "feasibility": verdict.feasibility,
+                "completeness": verdict.completeness,
+                "scope": verdict.scope,
+                "reasons": reasons,
+            },
+            "next_actions": reasons,
+        }
 
     OUTPUT_RESULTS.mkdir(parents=True, exist_ok=True)
     # Fresh start — clear previous run's results so report reflects only this plan
@@ -493,4 +516,64 @@ def read_log(n_lines: int = 30) -> Dict:
     return _ok(
         f"日志末尾 {min(n_lines, len(lines))} 行",
         artifacts={"log": tail, "total_lines": len(lines)},
+    )
+
+
+# ──────────────────────────────────────────────────────────────────
+# Tool: dispatch_subagent — 把专项任务委派给具备特定专长的子 agent
+# ──────────────────────────────────────────────────────────────────
+
+def dispatch_subagent(role: str, task: str, context: str = "", state=None) -> Dict:
+    """以 role 对应的 subagent 系统提示运行一次性 LLM 调用,产出该任务的专业建议。
+
+    role: 必须是 agent/subagents/<role>.md 中存在的角色 (如 data-scientist)
+    task: 要委派的具体任务自然语言描述
+    context: 可选附加上下文(数据片段、已得结果摘要等)
+
+    返回 artifacts.response 中是子 agent 的完整回答。
+    注意: 子 agent 不能调用本系统的工具 — 只产出分析/建议文本,主 agent 再据此行动。
+    """
+    from app.skill_loader import load_subagent_content, load_subagents
+
+    content = load_subagent_content(role)
+    if content is None:
+        available = [sa.name for sa in load_subagents()]
+        return _err(f"未知 subagent 角色: {role}。可用: {available}")
+
+    # 剥掉 frontmatter,只用正文做 system prompt
+    import re as _re
+    body = _re.sub(r"^---\s*\n.*?\n---\s*\n", "", content, count=1, flags=_re.DOTALL).strip()
+    system = body + "\n\n注意: 你是被主 agent 委派的咨询者,只产出文本建议,不能调用工具。"
+
+    user_msg = f"## 任务\n{task}"
+    if context:
+        user_msg += f"\n\n## 上下文\n{context}"
+
+    try:
+        # 延迟导入避免循环
+        from app.agent import _make_client
+        import os as _os
+        client = _make_client()
+        resp = client.chat.completions.create(
+            model=_os.environ.get("SUBAGENT_MODEL", "deepseek-v4-pro"),
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=2000,
+            temperature=0.3,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        usage = getattr(resp, "usage", None)
+        usage_dict = {
+            "prompt_tokens": getattr(usage, "prompt_tokens", None),
+            "completion_tokens": getattr(usage, "completion_tokens", None),
+        } if usage else {}
+    except Exception as e:
+        return _err(f"子 agent 调用失败: {e}")
+
+    return _ok(
+        f"子 agent 「{role}」 已产出建议 ({len(text)} 字)",
+        artifacts={"role": role, "task": task[:200], "response": text, "usage": usage_dict},
+        next_actions=["参考 response,决定后续工具调用或回答用户"],
     )

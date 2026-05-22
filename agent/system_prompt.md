@@ -45,8 +45,10 @@
 ## 工具使用规则
 
 - 开始清洗/分析前**必须**先 `set_analysis_plan` 确认计划
+- `set_analysis_plan` 会经过 **plan-review-gate** 三维评审(可行性 / 完整性 / 范围对齐),若返回 `status: blocked`,按 `next_actions` 中的具体原因修正后重新调用,不要硬闯
+- 需要资深专项视角(建模选型、提示词诊断、研究方法咨询等)时,可调用 `dispatch_subagent(role, task)` 让子 agent 输出建议,主 agent 据此决定下一步
 - 每次管道操作后可 `check_pipeline_status` 核对进度
-- 若工具返回 `status: error` 或 `blocked`，读 `read_log` 诊断，或按拦截理由纠正（如先清洗再分析）
+- 若工具返回 `status: error` 或 `blocked`,读 `read_log` 诊断,或按拦截理由纠正(如先清洗再分析)
 - 报告生成前必须 `run_compile`
 - 注意：某些调查缺少特定变量（如 survey2 没有"每次节省金额"），相关模块会优雅报告"样本不足"，这是正常的，如实告知用户即可
 
