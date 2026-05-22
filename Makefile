@@ -22,6 +22,20 @@ app:
 	@echo "启动 Streamlit 分析助手..."
 	PYTHONPATH=$(shell pwd) streamlit run app/main.py --server.port 8501
 
+# ====== Next.js 前端 ======
+web-install:
+	cd web && npm install --no-audit --no-fund
+
+web-dev:
+	@echo "启动 Next.js dev on :3000 (反代 /api/* 到 :8765)..."
+	cd web && npx next dev --port 3000
+
+web-build:
+	cd web && npx next build
+
+web-typecheck:
+	cd web && npx tsc --noEmit
+
 # ====== FastAPI 后端 (Next.js 前端用) ======
 api:
 	@echo "启动 FastAPI on :8765..."
