@@ -15,6 +15,14 @@ from app.hooks import (
     post_tool_use_failure,
     pre_tool_use,
 )
+from app.observability import (
+    end_turn,
+    is_enabled as langfuse_enabled,
+    record_tool_call,
+    record_tool_result,
+    start_turn,
+    wrap_openai_client,
+)
 from app.router import filter_tools, route
 from app.tools import (
     check_pipeline_status,
@@ -233,7 +241,7 @@ def _load_system_prompt() -> str:
     return "你是问卷调查统计分析助手。"
 
 
-def _dispatch(name: str, arguments: str, state) -> dict:
+def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
     """Parse JSON arguments and route to tool implementation."""
     try:
         inputs = json.loads(arguments) if arguments else {}
@@ -288,9 +296,18 @@ def _dispatch(name: str, arguments: str, state) -> dict:
         }
 
     try:
-        result = fn()
-    except Exception as e:
-        result = {"status": "error", "summary": f"工具 {name} 执行异常: {e}", "artifacts": {}, "next_actions": []}
+        with record_tool_call(trace, name, inputs) as span:
+            try:
+                result = fn()
+            except Exception as e:
+                result = {"status": "error", "summary": f"工具 {name} 执行异常: {e}", "artifacts": {}, "next_actions": []}
+            record_tool_result(span, result)
+    except Exception:
+        # Observability must never break the agent loop
+        try:
+            result = fn()
+        except Exception as e:
+            result = {"status": "error", "summary": f"工具 {name} 执行异常: {e}", "artifacts": {}, "next_actions": []}
 
     # PostToolUse hooks — record outcome
     post_tool_use(name, result, state)
@@ -305,11 +322,15 @@ def _make_client() -> OpenAI:
     uses socks:// which httpx cannot parse; HTTPS_PROXY through the local
     tunnel causes auth failures for deepseek-v4-pro).
     Direct HTTPS to api.deepseek.com is reachable without a proxy.
+
+    If LANGFUSE_* env vars are set, the returned client is wrapped to
+    automatically emit traces for every chat.completions call.
     """
     import httpx
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     http_client = httpx.Client(transport=httpx.HTTPTransport())
-    return OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL, http_client=http_client)
+    client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL, http_client=http_client)
+    return wrap_openai_client(client)
 
 
 def run_agent_turn(
@@ -324,6 +345,22 @@ def run_agent_turn(
     """
     client = _make_client()
     base_system = _load_system_prompt()
+
+    # Open a Langfuse trace for the whole turn (no-op if not configured)
+    last_user_msg = next(
+        (m.get("content", "") for m in reversed(api_messages) if m.get("role") == "user"),
+        "",
+    )
+    if isinstance(last_user_msg, list):
+        # Multimodal content; flatten text parts for the trace label
+        last_user_msg = " ".join(
+            p.get("text", "") for p in last_user_msg if isinstance(p, dict)
+        )
+    turn_trace = start_turn(
+        name="agent_turn",
+        user_input=str(last_user_msg)[:500],
+        metadata={"model": MODEL, "langfuse_enabled": langfuse_enabled()},
+    )
 
     # Router decides the phase + which tools to expose (re-evaluated each round
     # because tool calls change pipeline state, advancing the phase).
@@ -405,7 +442,7 @@ def run_agent_turn(
                     pass
 
                 yield {"type": "tool_call", "name": tc.function.name, "inputs": inputs_display}
-                result = _dispatch(tc.function.name, tc.function.arguments, state)
+                result = _dispatch(tc.function.name, tc.function.arguments, state, trace=turn_trace)
                 yield {"type": "tool_result", "name": tc.function.name, "result": result}
 
                 api_messages.append({
@@ -419,3 +456,4 @@ def run_agent_turn(
             break
 
     agent_stop(rounds_used)
+    end_turn(turn_trace, output={"rounds": rounds_used}, status="ok")
