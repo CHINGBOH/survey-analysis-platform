@@ -33,6 +33,7 @@ from app.tools import (
     interpret_results,
     preview_data,
     read_log,
+    render_charts,
     run_analysis_module,
     run_clean,
     run_compile,
@@ -275,6 +276,26 @@ TOOL_DEFS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "render_charts",
+            "description": (
+                "把指定模块的 RDS 渲染为 PNG 图表包(ggplot2),输出到 output/charts/<module>_<sid>/。"
+                "支持模块: descriptives(饼图/柱状/直方/Q-Q)、crosstabs(分组柱状)、correlation(热力图)、"
+                "ttest(箱线图)、regression(系数森林图)。"
+                "返回 manifest 含每张图的 file/title/type,可在 UI 预览或嵌入报告。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "module": {"type": "string", "description": "模块名"},
+                    "survey_id": {"type": "string", "enum": ["survey1", "survey2"]},
+                },
+                "required": ["module"],
+            },
+        },
+    },
 ]
 
 
@@ -338,6 +359,11 @@ def _dispatch(name: str, arguments: str, state, trace=None) -> dict:
             state=state,
         ),
         "interpret_results": lambda: interpret_results(
+            module=inputs["module"],
+            survey_id=inputs.get("survey_id", "survey1"),
+            state=state,
+        ),
+        "render_charts": lambda: render_charts(
             module=inputs["module"],
             survey_id=inputs.get("survey_id", "survey1"),
             state=state,

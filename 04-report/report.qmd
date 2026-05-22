@@ -20,6 +20,8 @@ execute:
 ```{r setup, include=FALSE}
 .libPaths(c("~/R/libs", .libPaths()))
 library(knitr)
+library(jsonlite)
+`%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 options(digits=4, knitr.kable.NA="")
 loaded <- readRDS("../output/results/compiled.rds")
 meta <- loaded$meta
@@ -201,6 +203,26 @@ for (i in seq_along(meta$surveys)) {
     fn <- render[[mod]]
     if (is.null(fn)) { cat("> （暂无渲染器）\n\n"); next }
     tryCatch(fn(res), error=function(e) cat("> ⚠️ 渲染出错：", conditionMessage(e), "\n\n"))
+    # ── 自动嵌入该模块的图表（若已通过 render_charts 生成） ─────
+    suffix <- gsub("survey", "s", lbl)
+    chart_dir <- file.path("..", "output", "charts", paste0(mod, "_", suffix))
+    manifest_path <- file.path(chart_dir, "manifest.json")
+    if (file.exists(manifest_path)) {
+      tryCatch({
+        m <- jsonlite::fromJSON(manifest_path, simplifyVector=FALSE)
+        charts <- m$charts
+        if (length(charts) > 0) {
+          cat("\n### 图表\n\n")
+          for (ch in charts) {
+            fp <- ch$file
+            if (!file.exists(fp)) fp <- file.path("..", ch$file)
+            if (file.exists(fp)) {
+              cat(sprintf("![%s](%s)\n\n", ch$title %||% ch$name, fp))
+            }
+          }
+        }
+      }, error=function(e) invisible(NULL))
+    }
   }
 }
 ```

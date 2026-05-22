@@ -644,3 +644,57 @@ def interpret_results(module: str, survey_id: str = "survey1", state=None) -> Di
             "调用 dispatch_subagent 让 data-scientist 复核解读",
         ],
     )
+
+
+# ──────────────────────────────────────────────────────────────────
+# Tool: render_charts — 调用 lib/charts.R 把模块结果渲染为 PNG 图表包
+# ──────────────────────────────────────────────────────────────────
+
+def render_charts(module: str, survey_id: str = "survey1", state=None) -> Dict:
+    """渲染指定模块的图表到 output/charts/<module>_<sid>/。
+
+    每个模块对应一组图(详见 02-analyze/render_charts.R 路由表):
+    - descriptives: 频数饼图/柱状图 + 直方图 + Q-Q 图
+    - crosstabs:    分组柱状图
+    - correlation:  相关矩阵热力图
+    - ttest:        箱线图
+    - regression:   系数森林图
+    """
+    if module not in VALID_MODULES:
+        return _err(f"未知模块: {module}")
+
+    suffix = _survey_suffix_local(survey_id)
+    rds_path = OUTPUT_RESULTS / f"{module}_{suffix}.rds"
+    if not rds_path.exists():
+        return _err(f"RDS 不存在: {rds_path.relative_to(ROOT)}; 请先运行该模块")
+
+    rc, stdout, stderr = _run(
+        ["Rscript", "02-analyze/render_charts.R", module, survey_id], timeout=120
+    )
+    if rc != 0:
+        return _err(f"图表渲染失败 (exit {rc})", detail=stderr[-600:])
+
+    out_dir = ROOT / "output" / "charts" / f"{module}_{suffix}"
+    manifest_path = out_dir / "manifest.json"
+    if not manifest_path.exists():
+        return _err("manifest.json 未生成")
+
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except Exception as e:
+        return _err(f"manifest 解析失败: {e}")
+
+    charts = manifest.get("charts", [])
+    return _ok(
+        f"{module}@{survey_id} 渲染完成: {len(charts)} 张图",
+        artifacts={
+            "module": module,
+            "survey_id": survey_id,
+            "out_dir": str(out_dir.relative_to(ROOT)),
+            "charts": charts,
+        },
+        next_actions=[
+            "图表已存盘,可在 UI 预览或嵌入报告",
+            "interpret_results 生成结构化解读以配合图表",
+        ],
+    )
