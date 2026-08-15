@@ -89,3 +89,11 @@ third-party/
 benchmarks/
 generated/
 migrations/
+
+# Runtime Artifacts & Logs
+logs/
+output/
+*.rds
+*.log
+.hermes/
+data/
