@@ -1,7 +1,9 @@
+# Survey Analysis Platform (SPSS-style Pipeline)
 streamlit>=1.32.0
-openai>=1.30.0
-pydantic>=2.0.0
-pandas>=2.0.0
-openpyxl>=3.0.0
-langfuse>=2.50.0  # 可观测性,通过 LANGFUSE_* 环境变量启用
-instructor>=1.10.0  # Pydantic-约束 LLM 输出,杜绝结构幻觉
+pandas>=2.2.0
+numpy>=1.26.0
+statsmodels>=0.14.1
+scikit-learn>=1.4.0
+pydantic>=2.7.0
+fastapi>=0.110.0
+uvicorn>=0.28.0
