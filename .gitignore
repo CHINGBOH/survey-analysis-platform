@@ -97,3 +97,6 @@ output/
 *.log
 .hermes/
 data/
+
+.github/
+Makefile
