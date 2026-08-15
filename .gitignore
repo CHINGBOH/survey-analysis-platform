@@ -42,3 +42,19 @@ output/results/*.json
 data/raw/*.xlsx
 data/raw/*.csv
 data/raw/*.xls
+
+# Lean Architecture Anti-Bloat Filters
+*.py[cod]
+*$py.class
+*.bak
+*.tmp
+*.orig
+*.swp
+*.swo
+*.tsbuildinfo
+.venv/
+env/
+node_modules/
+dist/
+build/
+.cache/
